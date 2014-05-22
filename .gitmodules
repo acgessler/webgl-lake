@@ -1,0 +1,3 @@
+[submodule "medea"]
+	path = medea
+	url = https://github.com/acgessler/medea.js
