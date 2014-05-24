@@ -114,16 +114,24 @@ function on_init_context(terrain_image) {
 	root.AddChild(light);
 
 	var water = root.AddChild();
-	var water_mesh = medea.CreateStandardMesh_Plane(medea.CreateSimpleMaterialFromTexture(
-		'url:/data/textures/water.jpg'));
+	var water_material = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/water', {
+			texture : 'url:/data/textures/water.jpg',
+			spec_color_shininess : [0.95, 0.95, 1.0, 32.0]
+		}
+	);
+	water_material.Pass(0).SetDefaultAlphaBlending();
+
+	var water_mesh = medea.CreateStandardMesh_Plane(water_material);
+	water_mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
+
 	water_mesh.Material().Pass(0).CullFace(false);
 	water.AddEntity(water_mesh);
 
 	water.Translate([0,-9.01,0]);
     water.Scale(800);
 
-    for (var x = -10; x <= 10; ++x) {
-    	for (var y = -10; y <= 10; ++y) {
+    for (var x = -12; x <= 12; ++x) {
+    	for (var y = -10; y <= 12; ++y) {
     		root.AddChild(new TerrainTile(x, y)).Translate([0,-50,0]);
     	}
 	}
@@ -152,7 +160,12 @@ function on_init_context(terrain_image) {
 		return true;
 	});	
 
-	medea.SetDebugPanel(null);
+	medea.SetDebugPanel(null, function() {
+		var f1 = medea.debug_panel.gui.addFolder('Terrain');
+		f1.add(this, 'lod_attenuation');
+	});
+
+	
     
     console.log("Starting main loop");
 	medea.Start();

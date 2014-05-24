@@ -1,0 +1,40 @@
+
+/* medea.js - Open Source, High-Performance 3D Engine based on WebGL.
+ *
+ * (c) 2011-2013, Alexander C. Gessler
+ *  https://github.com/acgessler/medea.js
+ *
+ * Made available under the terms and conditions of a 3-clause BSD license.
+ *
+ */
+ 
+uniform vec3 LIGHT_D0_DIR;
+
+uniform sampler2D texture;
+uniform vec4 spec_color_shininess;
+
+#include <remote:mcore/shaders/core.psh>
+#include <remote:mcore/shaders/lighting.psh>
+
+// currently all lighting computation happens in worldspace
+void main()
+{
+	// Water normal is always facing upwards ...
+	vec3 N = vec3(0.0, 1.0, 0.0);
+
+	// diffuse contribution
+	float diffuse = ComputeLambertDiffuseCoeff(LIGHT_D0_DIR, N);
+
+	// Specular contribution (blinn)
+	vec3 tex = texture2D(texture, FetchTexCoord()).rgb;
+	float specular = ComputeBlinnSpecularCoeff(
+		FetchVec3(eye),
+		N,
+		LIGHT_D0_DIR,
+		spec_color_shininess.a
+	);
+
+    gl_FragColor.a = 0.68;
+	gl_FragColor.rgb =  tex * diffuse + spec_color_shininess.rgb * specular;
+}
+
