@@ -1,0 +1,101 @@
+
+
+/* medea.js - Open Source, High-Performance 3D Engine based on WebGL.
+ *
+ * (c) 2011-2013, Alexander C. Gessler
+ *  https://github.com/acgessler/medea.js
+ *
+ * Made available under the terms and conditions of a 3-clause BSD license.
+ *
+ */
+
+#include <remote:mcore/shaders/core.psh>
+#include <remote:mcore/shaders/lighting.psh>
+
+uniform vec3 LIGHT_D0_DIR;
+
+uniform sampler2D coarse_normal_texture;
+uniform sampler2D texture;
+uniform sampler2D normal_texture;
+
+#ifdef TERRAIN_SPECULAR
+uniform vec4 spec_color_shininess;
+#endif
+
+uniform vec4 terrain_uv_offset_scale;
+uniform float inv_terrain_map_dim;
+
+const float kDETAIL_NORMAL_STRENGTH = 0.2;
+const float kSPECULAR_STRENGTH = 0.2;
+const float kCOARSE_NORMAL_SCALE = 0.2;
+
+void main()
+{
+	vec2 uv = FetchTexCoord();
+
+	// Fetch normal, height and occlusion from RGBA normal map
+	vec4 nor_occ = texture2D(coarse_normal_texture,
+		inv_terrain_map_dim * (terrain_uv_offset_scale.xy + uv * terrain_uv_offset_scale.zw)
+	);
+
+	uv.x *= 0.5;
+
+	// Take the normal from rg, skew the angle a bit
+	// Note: for an unrotated terrain tile, tangent and world space
+	// is the same, which greatly simplifies all tangent space
+	// calculations we do.
+	vec3 N = (nor_occ.rbg-0.5) * vec3(2.0, 2.0 * kCOARSE_NORMAL_SCALE, 2.0);
+	N = normalize(N);
+
+	// Derive the blending between ground base and rock base from the angle
+	vec3 rock_base_blend = N.bbb + 0.2;
+
+	// Mix in the normal deltas from both maps.
+	// This now is an approximation to properly blending normals
+	// which is more than just an addition.
+	vec3 nor_base = texture2D(normal_texture, uv).rgb;
+	vec3 nor_rock = texture2D(normal_texture, uv + vec2(0.5, 0.0)).rgb;
+	N += (mix(nor_rock, nor_base, rock_base_blend) - 0.5).rbg * 2.0 *
+		kDETAIL_NORMAL_STRENGTH;
+	N = normalize(N);
+
+	// Diffuse contribution: simple lambert against sun direction
+	float diffuse = ComputeLambertDiffuseCoeff(LIGHT_D0_DIR, N);
+
+	// Apply ambient occlusion
+	diffuse = diffuse * nor_occ.a;
+
+	vec3 eye = FetchVec3(eye);
+#ifdef TERRAIN_SPECULAR
+	// Specular contribution: simple blinn with self-shadowing
+	float specular = ComputeBlinnSpecularCoeff(
+		eye,
+		N,
+		LIGHT_D0_DIR,
+		spec_color_shininess.a
+	) * kSPECULAR_STRENGTH;
+	specular *= clamp(diffuse * 4.0, 0.0, 1.0);
+#endif
+
+	// Get the diffuse base color by blending the color textures
+	vec3 tex_base = texture2D(texture, uv).rgb;
+	vec3 tex_rock = texture2D(texture, uv + vec2(0.5, 0.0)).rgb;
+	tex_base *= tex_base; // Gamma
+	tex_rock *= tex_rock; // Gamma
+	vec3 tex = mix(tex_rock, tex_base, rock_base_blend);
+
+	// Simple fog
+	vec3 color = tex * diffuse
+#ifdef TERRAIN_SPECULAR
+	+ spec_color_shininess.rgb * specular;
+#endif
+	;
+	vec3 fog_color = vec3(0.6,0.6,1.0);
+	eye.y = 0.0;
+	float distance = clamp((dot(eye, eye) - 500000.0) / 2000000.0, 0.0, 1.0);
+
+	// Assemble
+    gl_FragColor.a = 1.0;
+	gl_FragColor.rgb = sqrt(mix(color, fog_color, clamp(distance, 0.0, 1.0)));
+}
+

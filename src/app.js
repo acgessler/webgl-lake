@@ -15,6 +15,7 @@ function on_tick(dtime) {
 
 function on_init_context(terrain_image) {
 	var TILE_SIZE = 64;
+	var TERRAIN_PLANE_WIDTH = 2064;
 	var TILE_INDEX_OFFSET = 12;
 
 	var TerrainTile = medea.Node.extend({
@@ -22,23 +23,36 @@ function on_init_context(terrain_image) {
 		y : 0,
 		init : function(x, y) {
 			this._super();
-			this.x = x || 0;
-			this.y = y || 0;
+			this.x = x | 0;
+			this.y = y | 0;
 
 			var outer = this;
-			var material = this._GetBaseMaterial();
+
+			// For each tile, create a clone of the material prototype
+			// that has its own set of constants but shares other
+			// rendering state. This will minimize the number of state
+			// changes required to draw multiple tiles.
+			var material = medea.CloneMaterial(this._GetBaseMaterial(), 
+				medea.MATERIAL_CLONE_COPY_CONSTANTS | medea.MATERIAL_CLONE_SHARE_STATE);
+
+			var xs = (x + TILE_INDEX_OFFSET) * TILE_SIZE;
+			var ys = (y + TILE_INDEX_OFFSET) * TILE_SIZE;
+			var ws = TILE_SIZE;
+			var hs = TILE_SIZE;
+
+			material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
 			medea.CreateTerrainTileMesh(terrain_image,
 				material,
 				function(mesh) {
 					var child = outer.AddChild();
 					child.Translate([-TILE_SIZE / 2 + outer.x * TILE_SIZE,10,-TILE_SIZE / 2 + outer.y * TILE_SIZE]);
 					child.AddEntity(mesh);
-					child.Scale([1,0.4,1]);
+					child.Scale([1,0.7,1]);
 				},
-				(x + TILE_INDEX_OFFSET) * TILE_SIZE,
-				(y + TILE_INDEX_OFFSET) * TILE_SIZE,
-				TILE_SIZE + 1,
-				TILE_SIZE + 1
+				xs,
+				ys,
+				ws,
+				hs
 			);
 		},
 
@@ -46,9 +60,28 @@ function on_init_context(terrain_image) {
 			var mat = null;
 			return function() {
 				if (mat) return mat;
-				mat = medea.CreateSimpleMaterialFromTexture('url:data/textures/concrete-51.png',
-					true, 16, null, 
-					'url:data/textures/concrete-51_NM.png');
+				var constants = {
+					// TERRAIN_SPECULAR
+					// spec_color_shininess : [1,1,1,32],
+					coarse_normal_texture : 'url:data/textures/heightmap0-nm_NRM.png',
+					normal_texture : 'url:data/textures/concrete-51_NM.png',
+					texture : 'url:data/textures/concrete-51.png',
+
+					inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
+
+					// The heightmap needs custom parameters so we need to load it
+					// manually (this is no overhead, specifying a URL for a texture
+					// constant directly maps to medea.CreateTexture on that URL)
+					heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
+						// We don't need MIPs for the heightmap anyway
+						medea.TEXTURE_FLAG_NO_MIPS | 
+						// Also, only one channel is required
+						medea.TEXTURE_FORMAT_LUM |
+						// Hint to medea that the texture will be accessed
+						// from within a vertex shader.
+						medea.TEXTURE_VERTEX_SHADER_ACCESS),
+				};	
+				mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
 				return mat;
 			};
 		})()
@@ -60,19 +93,19 @@ function on_init_context(terrain_image) {
 	
 	root = medea.RootNode();
 	var light = medea.CreateNode();
-	light.AddEntity(medea.CreateDirectionalLight([1,1,1], [0.2,-1,-0.5]));
+	light.AddEntity(medea.CreateDirectionalLight([1,1,1], [0.6, -1,-0.8]));
 	root.AddChild(light);
 
 	var water = root.AddChild();
-	var water_mesh = medea.CreateStandardMesh_Plane([0.7, 0.9, 0.95]);
+	var water_mesh = medea.CreateStandardMesh_Plane(medea.CreateSimpleMaterialFromTexture('url:/data/textures/water.jpg'));
 	water_mesh.Material().Pass(0).CullFace(false);
 	water.AddEntity(water_mesh);
 
-	water.Translate([0,-20.01,0]);
-    water.Scale(400);
+	water.Translate([0,-9.01,0]);
+    water.Scale(800);
 
-    for (var x = -4; x <= 4; ++x) {
-    	for (var y = -4; y <= 4; ++y) {
+    for (var x = -10; x <= 10; ++x) {
+    	for (var y = -10; y <= 10; ++y) {
     		root.AddChild(new TerrainTile(x, y)).Translate([0,-50,0]);
     	}
 	}
@@ -115,12 +148,8 @@ function run() {
 		medea = _medea;
 
 		// Load the terrain base image
-		var img = new Image();
-		img.onload = function() {
+		medea.CreateImage('url:data/textures/heightmap0.png', function(img) {
 			on_init_context(img);
-		};
-
-		img.src = 'data/textures/heightmap0.png';
-
+		});
 	}, on_init_error);
 }
