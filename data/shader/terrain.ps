@@ -94,7 +94,7 @@ void main()
 	eye.y = 0.0;
 	float distance = clamp((dot(eye, eye) - 500000.0) / 2000000.0, 0.0, 1.0);
 
-	// Assemble
+	// Assemble, Fog, Gamma
     gl_FragColor.a = 1.0;
 	gl_FragColor.rgb = sqrt(mix(color, fog_color, clamp(distance, 0.0, 1.0)));
 }

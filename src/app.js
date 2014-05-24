@@ -15,7 +15,7 @@ function on_tick(dtime) {
 
 function on_init_context(terrain_image) {
 	var TILE_SIZE = 64;
-	var TERRAIN_PLANE_WIDTH = 2064;
+	var TERRAIN_PLANE_WIDTH = 2048;
 	var TILE_INDEX_OFFSET = 12;
 
 	var TerrainTile = medea.Node.extend({
@@ -32,8 +32,12 @@ function on_init_context(terrain_image) {
 			// that has its own set of constants but shares other
 			// rendering state. This will minimize the number of state
 			// changes required to draw multiple tiles.
-			var material = medea.CloneMaterial(this._GetBaseMaterial(), 
+			var material = medea.CloneMaterial(this._GetPrototypeTerrainMaterial(), 
 				medea.MATERIAL_CLONE_COPY_CONSTANTS | medea.MATERIAL_CLONE_SHARE_STATE);
+
+			// Create a clone of the mesh prototype and assign the cloned
+			// material to it.
+			var mesh = medea.CloneMesh(this._GetPrototypeTerrainTileMesh(), material);
 
 			var xs = (x + TILE_INDEX_OFFSET) * TILE_SIZE;
 			var ys = (y + TILE_INDEX_OFFSET) * TILE_SIZE;
@@ -41,50 +45,46 @@ function on_init_context(terrain_image) {
 			var hs = TILE_SIZE;
 
 			material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
-			medea.CreateTerrainTileMesh(terrain_image,
-				material,
-				function(mesh) {
-					var child = outer.AddChild();
-					child.Translate([-TILE_SIZE / 2 + outer.x * TILE_SIZE,10,-TILE_SIZE / 2 + outer.y * TILE_SIZE]);
-					child.AddEntity(mesh);
-					child.Scale([1,0.7,1]);
-				},
-				xs,
-				ys,
-				ws,
-				hs
-			);
+
+			// Attach the mesh to the scenegraph
+			var child = this.AddChild();
+			child.Translate([-TILE_SIZE / 2 + this.x * TILE_SIZE,10,-TILE_SIZE / 2 + this.y * TILE_SIZE]);
+			child.AddEntity(mesh);
+			child.Scale([1,0.7,1]);
 		},
 
-		_GetBaseMaterial : (function() {
-			var mat = null;
-			return function() {
-				if (mat) return mat;
-				var constants = {
-					// TERRAIN_SPECULAR
-					// spec_color_shininess : [1,1,1,32],
-					coarse_normal_texture : 'url:data/textures/heightmap0-nm_NRM.png',
-					normal_texture : 'url:data/textures/concrete-51_NM.png',
-					texture : 'url:data/textures/concrete-51.png',
+		_GetPrototypeTerrainTileMesh : medealib.Cached(function() {
+			return medea.CreateFlatTerrainTileMesh(this._GetPrototypeTerrainMaterial(),
+				TILE_SIZE,
+				TILE_SIZE,
+				undefined, /* LOD levels */
+				true /* No UVS */);
+		}),
 
-					inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
+		_GetPrototypeTerrainMaterial : medealib.Cached(function() {
+			var constants = {
+				// TERRAIN_SPECULAR
+				// spec_color_shininess : [1,1,1,32],
+				coarse_normal_texture : 'url:data/textures/heightmap0-nm_NRM.png',
+				normal_texture : 'url:data/textures/concrete-51_NM.png',
+				texture : 'url:data/textures/concrete-51.png',
 
-					// The heightmap needs custom parameters so we need to load it
-					// manually (this is no overhead, specifying a URL for a texture
-					// constant directly maps to medea.CreateTexture on that URL)
-					heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
-						// We don't need MIPs for the heightmap anyway
-						medea.TEXTURE_FLAG_NO_MIPS | 
-						// Also, only one channel is required
-						medea.TEXTURE_FORMAT_LUM |
-						// Hint to medea that the texture will be accessed
-						// from within a vertex shader.
-						medea.TEXTURE_VERTEX_SHADER_ACCESS),
-				};	
-				mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
-				return mat;
-			};
-		})()
+				inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
+
+				// The heightmap needs custom parameters so we need to load it
+				// manually (this is no overhead, specifying a URL for a texture
+				// constant directly maps to medea.CreateTexture on that URL)
+				heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
+					// We don't need MIPs for the heightmap anyway
+					medea.TEXTURE_FLAG_NO_MIPS | 
+					// Also, only one channel is required
+					medea.TEXTURE_FORMAT_LUM |
+					// Hint to medea that the texture will be accessed
+					// from within a vertex shader.
+					medea.TEXTURE_VERTEX_SHADER_ACCESS),
+			};	
+			return medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
+		}),
 	});
 
 	console.log("Context created, setting up scene");
@@ -97,7 +97,8 @@ function on_init_context(terrain_image) {
 	root.AddChild(light);
 
 	var water = root.AddChild();
-	var water_mesh = medea.CreateStandardMesh_Plane(medea.CreateSimpleMaterialFromTexture('url:/data/textures/water.jpg'));
+	var water_mesh = medea.CreateStandardMesh_Plane(medea.CreateSimpleMaterialFromTexture(
+		'url:/data/textures/water.jpg'));
 	water_mesh.Material().Pass(0).CullFace(false);
 	water.AddEntity(water_mesh);
 
