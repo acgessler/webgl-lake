@@ -4,6 +4,8 @@ var medea = null;
 var viewport = null;
 var root = null;
 
+var lod_attenuation = 1.0;
+
 function on_init_error() {
 	console.log("Failed to initialize");
 }
@@ -17,10 +19,13 @@ function on_init_context(terrain_image) {
 	var TILE_SIZE = 64;
 	var TERRAIN_PLANE_WIDTH = 2048;
 	var TILE_INDEX_OFFSET = 12;
+	var TERRAIN_LOD_LEVELS = 5;
 
 	var TerrainTile = medea.Node.extend({
 		x : 0,
 		y : 0,
+		mesh : null,
+
 		init : function(x, y) {
 			this._super();
 			this.x = x | 0;
@@ -37,7 +42,10 @@ function on_init_context(terrain_image) {
 
 			// Create a clone of the mesh prototype and assign the cloned
 			// material to it.
-			var mesh = medea.CloneMesh(this._GetPrototypeTerrainTileMesh(), material);
+			var mesh = this.mesh = medea.CloneMesh(this._GetPrototypeTerrainTileMesh(), material);
+
+			// The default LOD mesh assigns LOD 
+			//mesh._SelectLOD = this._SelectLOD();
 
 			var xs = (x + TILE_INDEX_OFFSET) * TILE_SIZE;
 			var ys = (y + TILE_INDEX_OFFSET) * TILE_SIZE;
@@ -54,11 +62,15 @@ function on_init_context(terrain_image) {
 		},
 
 		_GetPrototypeTerrainTileMesh : medealib.Cached(function() {
-			return medea.CreateFlatTerrainTileMesh(this._GetPrototypeTerrainMaterial(),
+			var mesh = medea.CreateFlatTerrainTileMesh(this._GetPrototypeTerrainMaterial(),
 				TILE_SIZE,
 				TILE_SIZE,
-				undefined, /* LOD levels */
+				TERRAIN_LOD_LEVELS,
 				true /* No UVS */);
+
+			mesh.BB(medea.CreateBB([0, 64, 0], [TILE_SIZE, 128, TILE_SIZE]));
+			mesh.LODAttenuationScale(lod_attenuation);
+			return mesh;
 		}),
 
 		_GetPrototypeTerrainMaterial : medealib.Cached(function() {
@@ -70,6 +82,11 @@ function on_init_context(terrain_image) {
 				texture : 'url:data/textures/concrete-51.png',
 
 				inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
+
+				// Use a function setter to update tweakables every frame
+				lod_attenuation : function() {
+					return lod_attenuation;
+				},
 
 				// The heightmap needs custom parameters so we need to load it
 				// manually (this is no overhead, specifying a URL for a texture

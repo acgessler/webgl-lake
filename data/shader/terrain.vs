@@ -16,6 +16,7 @@ uniform sampler2D heightmap;
 
 uniform vec4 terrain_uv_offset_scale;
 uniform float inv_terrain_map_dim;
+uniform float lod_attenuation;
 
 const float kMIN_LOD = 0.0;
 const float kMAX_LOD = 4.0;
@@ -23,7 +24,7 @@ const float kMAX_LOD = 4.0;
 const float kINV_TILE_SIZE = 1.0 / 64.0;
 
 float CalcLOD(vec3 world_eye) {
-	float l = log(dot(world_eye, world_eye) * 0.0001) * 2.0;
+	float l = log(dot(world_eye, world_eye) * 0.0001) * 2.0 * lod_attenuation;
 	return l;
 }
 
