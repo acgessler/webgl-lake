@@ -74,11 +74,12 @@ void main()
 	// large part of this can be further vectorized.
 	float lower_lod_height = SampleLOD(base, lod_shift.x);
 	float upper_lod_height = SampleLOD(base, lod_shift.y);
-	position.y = mix(lower_lod_height, upper_lod_height, clod - lod_pair.x) * 255.0;
+	float height = mix(lower_lod_height, upper_lod_height, clod - lod_pair.x);
+	position.y = height * 255.0;
 
 	// Forward final position and computed UV to PS
 	PassClipPosition(ModelToClipSpace(position));
 	PassTexCoord(uv);
-	PassVec3(eye, world_eye);
+	PassVec4(eye_height, vec4(world_eye, height));
 }
 
