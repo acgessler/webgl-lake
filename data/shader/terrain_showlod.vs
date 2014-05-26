@@ -20,15 +20,17 @@ void main()
 	vec3 position = FetchPosition();
 	vec2 uv = position.xz * kINV_TILE_SIZE;
 
+	position.y = 0.0;
 	vec3 world_position = ModelToWorldSpace(position);
 	vec3 world_eye = CAM_POS - world_position;
 
-	float height = ComputeHeightAt(position, vec3(world_eye.x, 0.0, world_eye.z), uv);
+	float height = ComputeHeightAt(position, vec3(world_eye.x, 0, world_eye.z), uv);
 	position.y = height * 255.0;
 
 	// Forward final position and computed UV to PS
 	PassClipPosition(ModelToClipSpace(position));
-	PassTexCoord(uv);
-	PassVec4(eye_height, vec4(world_eye, height));
+
+	float lod = CalcLOD(vec3(world_eye.x, 0, world_eye.z));
+	PassVec2(lod, vec2(lod_range.y - lod, lod - lod_range.x));
 }
 

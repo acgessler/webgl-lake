@@ -4,32 +4,196 @@ var medea = null;
 var viewport = null;
 var root = null;
 
-var lod_attenuation = 1.0;
+var lod_attenuation = 0.4;
+var COUNT_LOD_LEVELS = 6;
 
 function on_init_error() {
 	console.log("Failed to initialize");
 }
 
+// Called by medea once per frame
 function on_tick(dtime) {
 	return true;
 }
 
+// Given an approximate |sq_distance| of an object, determine the
+// continuous LOD (CLOD) value for it. CLOD is in [0, COUNT_LOD_LEVELS[
+//
+// Must keep in sync with terrain.vs
+function calc_clod(sq_distance) {
+	var log_distance = Math.log(sq_distance / (16.0 * 16.0)) * 0.5 * lod_attenuation / Math.log(2);
+	return Math.max(0, Math.min(COUNT_LOD_LEVELS - 1,
+		log_distance));
+}
 
+// Invoked once the medea context (global |medea|) is ready to use
 function on_init_context(terrain_image) {
 	var TILE_SIZE = 64;
 	var TERRAIN_PLANE_WIDTH = 2048;
-	var TILE_INDEX_OFFSET = 12;
-	var TERRAIN_LOD_LEVELS = 5;
+
+	// Adaptive Quad-Tree node to dynamically subdivide the terrain.
+	//
+	// The rule for splitting is that a single terrain tile may
+	// not span more than one LOD region, i.e. the maximum delta
+	// in CLOD between any pair of corners is 1.
+	//
+	// On every Render(), the tree is updated to reflect the
+	// camera being rendered. Unused child nodes are retained (but kept
+	// disabled) though, so changing between cameras is cheap and does not incur
+	// any expensive scenegraph updates.
+	var TerrainQuadTreeNode = medea.Node.extend({
+		x : 0,
+		y : 0,
+		w : 1,
+		h : 1,
+
+		// TerrainTile to do the actual drawing
+		draw_tile : null,
+
+		// Child nodes
+		// (sub_quads is already a field of medea.Node)
+		sub_quads : null,
+
+		init : function(x, y, w, h) {
+			this._super();
+			this.x = x | 0;
+			this.y = y | 0;
+			this.w = w === undefined ? 1 : w;
+			this.h = h === undefined ? 1 : h;
+
+			// TODO: get proper BB from lookup table
+			this.SetStaticBB(medea.CreateBB(
+				vec3.create([this.x * TILE_SIZE, 0, this.y * TILE_SIZE]),
+				vec3.create([(this.x + this.w) *  TILE_SIZE, 255, (this.y + this.h) *  TILE_SIZE])
+			));
+		},
+
+		// This is a Render() operation (not Update) since the terrain
+		// rendering depends on the camera/viewport.
+		Render : function(camera, rqmanager) {
+			var cam_pos = camera.GetWorldPos();
+
+			// Determine whether to further sub-divide or not
+			var bb = this.GetWorldBB();
+
+			var vmin = bb[0];
+			var vmax = bb[1];
+			var can_subdivide = this.w != 1 && this.h != 1;
+			
+			// We always sub-divide if the player is in the node
+			if (can_subdivide && 
+				cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
+				cam_pos[2] >= vmin[2] && cam_pos[2] < vmax[2]) {
+				this._Subdivide();
+				return;
+			}
+
+			// Also, we always sub-divide if the LOD for the
+			// entire tile (which spans multiple 1x1 tiles) would be
+			// above the maximum LOD level.
+			if (can_subdivide && this.w > (1 << (COUNT_LOD_LEVELS-1))) {
+				this._Subdivide();
+				return;
+			}
+
+			// TODO: instead of assuming y==0 (what the shader
+			// currently does, assume the center of the BB)
+			cam_pos[1] = 0.0;
+			var corners = [
+				[vmin[0], 0, vmin[2]],
+				[vmin[0], 0, vmax[2]],
+				[vmax[0], 0, vmin[2]],
+				[vmax[0], 0, vmax[2]],
+			];
+
+			var clod_min, clod_max;
+			var scratch_vec = vec3.create();
+			for (var i = 0; i < 4; ++i) {
+				var delta = vec3.subtract(cam_pos, corners[i], scratch_vec);
+				var clod = calc_clod(vec3.dot(delta, delta));
+				if (i === 0 || clod < clod_min) {
+					clod_min = clod;
+				}
+				if (i === 0 || clod > clod_max) {
+					clod_max = clod;
+				}
+			}
+			//clod_min = Math.floor(clod_min);
+			//clod_max = Math.ceil(clod_max);
+			var clod_delta = clod_max - clod_min;
+			if (clod_delta >= 0.5 && can_subdivide) {
+				this._Subdivide();
+			}
+			else {
+				this._RenderAsSingleTile(clod_min);
+			}
+		},
+
+		_Subdivide : function() {
+			var sub_quads = this.sub_quads;
+			if (sub_quads == null) {
+				sub_quads = this.sub_quads = new Array(4);
+				var x = this.x;
+				var y = this.y;
+				var w = this.w / 2;
+				var h = this.h / 2;
+				sub_quads[0] = new TerrainQuadTreeNode(x    , y    , w, h);
+				sub_quads[1] = new TerrainQuadTreeNode(x + w, y    , w, h);
+				sub_quads[2] = new TerrainQuadTreeNode(x    , y + h, w, h);
+				sub_quads[3] = new TerrainQuadTreeNode(x + w, y + h, w, h);
+
+				this.AddChild(sub_quads[0]);
+				this.AddChild(sub_quads[1]);
+				this.AddChild(sub_quads[2]);
+				this.AddChild(sub_quads[3]);
+			}
+
+			// Enable the 4 sub-quads, disable the TerrainTile
+			for (var i = 0; i < 4; ++i) {
+				sub_quads[i].Enabled(true);
+			}
+
+			if (this.draw_tile) {
+				this.draw_tile.Enabled(false);
+			}
+		},
+
+		_RenderAsSingleTile : function(clod_min) {
+			if (this.draw_tile === null) {
+				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h);
+				this.AddChild(this.draw_tile);
+			}
+
+			this.draw_tile.SetLODRange(Math.floor(clod_min), Math.floor(clod_min)+ 1);
+
+			// Enable the TerrainTile, disable the 4 sub-quads
+			this.draw_tile.Enabled(true);
+			var sub_quads = this.sub_quads;
+			if (!sub_quads) {
+				return;
+			}
+			for (var i = 0; i < 4; ++i) {
+				sub_quads[i].Enabled(false);
+			}
+		},
+	});
 
 	var TerrainTile = medea.Node.extend({
 		x : 0,
 		y : 0,
+		w : 1,
+		h : 1,
 		mesh : null,
 
-		init : function(x, y) {
+		lod_min : -1,
+		lod_max : -1,
+
+		init : function(x, y, w, h) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
+			this.w = w === undefined ? 1 : w;
+			this.h = h === undefined ? 1 : h;
 
 			var outer = this;
 
@@ -44,31 +208,45 @@ function on_init_context(terrain_image) {
 			// material to it.
 			var mesh = this.mesh = medea.CloneMesh(this._GetPrototypeTerrainTileMesh(), material);
 
-			// The default LOD mesh assigns LOD 
-			//mesh._SelectLOD = this._SelectLOD();
-
-			var xs = (x + TILE_INDEX_OFFSET) * TILE_SIZE;
-			var ys = (y + TILE_INDEX_OFFSET) * TILE_SIZE;
-			var ws = TILE_SIZE;
-			var hs = TILE_SIZE;
+			// The default LOD mesh assigns LOD based on a stock formula
+			// that doesn't match LOD assignment for tiles with w > 1.
+			var outer = this;
+			mesh._ComputeLODLevel = function() {
+				var lod = Math.floor(outer.lod_min - Math.log(outer.w) / Math.log(2.0));
+				//console.assert(lod >= 0, "invariant");
+				//return 0;
+				return Math.max(0,lod);
+			};
+			var xs = this.x * TILE_SIZE;
+			var ys = this.y * TILE_SIZE;
+			var ws = this.w * TILE_SIZE;
+			var hs = this.h * TILE_SIZE;
 
 			material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
 
 			// Attach the mesh to the scenegraph
-			var child = this.AddChild();
-			child.Translate([-TILE_SIZE / 2 + this.x * TILE_SIZE,10,-TILE_SIZE / 2 + this.y * TILE_SIZE]);
-			child.AddEntity(mesh);
-			child.Scale([1,0.7,1]);
+			this.Translate([xs, 0, ys]);
+			this.Scale([this.w, 0.7, this.h]);
+			this.AddEntity(mesh);
 		},
+
+
+		SetLODRange : function(lod_min, lod_max) {
+			this.lod_min = lod_min;
+			this.lod_max = lod_max;
+			this.mesh.Material().Pass(0).Set("lod_range", [lod_min, lod_max, 1 << lod_min, 1 << lod_max]);
+		},
+
 
 		_GetPrototypeTerrainTileMesh : medealib.Cached(function() {
 			var mesh = medea.CreateFlatTerrainTileMesh(this._GetPrototypeTerrainMaterial(),
 				TILE_SIZE,
 				TILE_SIZE,
-				TERRAIN_LOD_LEVELS,
+				COUNT_LOD_LEVELS,
 				true /* No UVS */);
 
-			mesh.BB(medea.CreateBB([0, 64, 0], [TILE_SIZE, 128, TILE_SIZE]));
+			// TODO: calculate proper bounding box
+			mesh.BB(medea.CreateBB([0, 0, 0], [TILE_SIZE, 255, TILE_SIZE]));
 			mesh.LODAttenuationScale(lod_attenuation);
 			return mesh;
 		}),
@@ -100,7 +278,9 @@ function on_init_context(terrain_image) {
 					// from within a vertex shader.
 					medea.TEXTURE_VERTEX_SHADER_ACCESS),
 			};	
-			return medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
+			var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
+			mat.SetIgnoreUniformVarLocationNotFound();
+			return mat;
 		}),
 	});
 
@@ -116,6 +296,10 @@ function on_init_context(terrain_image) {
 	var water = root.AddChild();
 	var water_material = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/water', {
 			texture : 'url:/data/textures/water.jpg',
+			// Allocate the heightmap again, this time with MIPs as we'll otherwise suffer from aliasing
+			heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
+					// Only one channel is required
+					medea.TEXTURE_FORMAT_LUM),
 			spec_color_shininess : [0.95, 0.95, 1.0, 32.0]
 		}
 	);
@@ -126,15 +310,32 @@ function on_init_context(terrain_image) {
 
 	water_mesh.Material().Pass(0).CullFace(false);
 	water.AddEntity(water_mesh);
+	
+	water.Translate([1024, 31.01, 1024]);
+    water.Scale(1024);
 
-	water.Translate([0,-9.01,0]);
-    water.Scale(800);
 
-    for (var x = -12; x <= 12; ++x) {
-    	for (var y = -10; y <= 12; ++y) {
-    		root.AddChild(new TerrainTile(x, y)).Translate([0,-50,0]);
-    	}
-	}
+    var mesh_parent = medea.CreateNode();
+	medea.LoadSceneFromResource('url:data/meshes/tree5.json', mesh_parent, null, function(st) {
+		if (st == medea.SCENE_LOAD_STATUS_GEOMETRY_FINISHED) {
+			mesh_parent.Translate([1024, 42, 1024]);
+			mesh_parent.Scale(0.25);
+			root.AddChild(mesh_parent);
+
+			mesh_parent.FilterEntitiesRecursively([medea.Mesh], function(m) {
+				m.Material().Pass(0).SetDefaultAlphaBlending();
+				m.RenderQueue(medea.RENDERQUEUE_ALPHA);
+			});
+
+			//medea.CloneNode(mesh_parent);
+		}
+	});
+
+
+	root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32));
+   
+
+
 
 	// Add the skydome, as in the previous sample
 	medea.LoadModules('skydome',function() {
@@ -149,7 +350,7 @@ function on_init_context(terrain_image) {
 		root.AddChild(cam);
 		viewport.Camera(cam);
 		
-		cam.Translate(vec3.create([0,25,5]));
+		cam.Translate(vec3.create([1024,75,1024]));
 		var cc = medea.CreateCamController('fps');
         cam.AddEntity(cc);
 		cc.Enable();
@@ -172,7 +373,7 @@ function on_init_context(terrain_image) {
 }
 
 function run() {
-	var deps = ['input', 'material', 'standardmesh', 'forwardrenderer', 'light', 'debug', 'terraintile'];
+	var deps = ['input', 'material', 'standardmesh', 'forwardrenderer', 'light', 'debug', 'terraintile', 'sceneloader'];
 	medealib.CreateContext('game_container', {dataroot: '../medea/data'}, deps, function(_medea) {
 		
 		// We only create one medea instance so make it global
