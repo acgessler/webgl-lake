@@ -5,7 +5,11 @@ var viewport = null;
 var root = null;
 
 var lod_attenuation = 0.5;
+
 var COUNT_LOD_LEVELS = 9;
+var TILE_SIZE = 64;
+var TERRAIN_PLANE_WIDTH = 2048;
+var TERRAIN_HEIGHT_SCALE = 0.65;
 
 function on_init_error() {
 	console.log("Failed to initialize");
@@ -30,11 +34,74 @@ function calc_clod(sq_distance) {
 		log_distance));
 }
 
+// Compute the min and max heights of each terrain tile on each LOD level.
+// Returns a 3D array where the dimensions are:
+//   - LOD level
+//   - X axis tile index
+//   - Y axis tile index
+//
+//  And each entry is a 2-tuple containing the minimum and maximum
+//  (unscaled) heights of the tile.
+//
+// The number of LOD levels is |log2(terrain_image.GetWidth() / TILE_SIZE)|.
+function compute_bounding_boxes(terrain_image) {
+	var data = terrain_image.GetData();
+	var tile_size = TILE_SIZE;
+	var tiles_count = terrain_image.GetWidth() / tile_size;
+
+	var level_count = log2(tiles_count) + 1;
+	var bbs = new Array(level_count);
+
+	// Derive base level (lod0) from source heightmap
+	bbs[0] = new Array(tiles_count);
+	for (var y = 0; y < tiles_count; ++y) {
+		bbs[0][y] = new Array(tiles_count);
+		for (var x = 0; x < tiles_count; ++x) {
+			var vmin = 1e10;
+			var vmax = -1e10;
+			for (var yy = 0; yy < tile_size; ++yy) {
+				var ybase = (y * tile_size + yy) * TERRAIN_PLANE_WIDTH;
+				for (var xx = 0; xx < tile_size; ++xx) {
+					var src_idx = (ybase + x * tile_size + xx) * 4;
+					var height = data[src_idx];
+
+					vmin = Math.min(vmin, height);
+					vmax = Math.max(vmax, height);
+				} 
+			}
+			bbs[0][y][x] = [vmin, vmax];
+		}
+	}
+
+	// Merge upwards
+	for (var l = 1; l < level_count; ++l) {
+		var old_tiles_count = tiles_count;
+		tiles_count /= 2;
+		bbs[l] = new Array(tiles_count);
+		for (var y = 0; y < tiles_count; ++y) {
+			bbs[l][y] = new Array(tiles_count);
+			for (var x = 0; x < tiles_count; ++x) {
+				var vmin = 1e10;
+				var vmax = -1e10;
+				for (var yy = 0; yy < 2; ++yy) {
+					var ybase = y * 2 + yy;
+					for (var xx = 0; xx < 2; ++xx) {
+						var minmax = bbs[l - 1][ybase][x * 2 + xx];
+
+						vmin = Math.min(vmin, minmax[0]);
+						vmax = Math.max(vmax, minmax[1]);
+					} 
+				}
+				bbs[l][y][x] = [vmin, vmax];
+			}
+		}
+	}
+	return bbs;
+}
 
 // Invoked once the medea context (global |medea|) is ready to use
 function on_init_context(terrain_image) {
-	var TILE_SIZE = 64;
-	var TERRAIN_PLANE_WIDTH = 2048;
+	var terrain_bounding_boxes = compute_bounding_boxes(terrain_image);
 
 	// Adaptive Quad-Tree node to dynamically subdivide the terrain.
 	//
@@ -52,6 +119,10 @@ function on_init_context(terrain_image) {
 		w : 1,
 		h : 1,
 
+		// The LOD level that rendering the entire node in a single
+		// tile corresponds to.
+		node_lod_level : null,
+
 		// TerrainTile to do the actual drawing
 		draw_tile : null,
 
@@ -59,17 +130,25 @@ function on_init_context(terrain_image) {
 		// (sub_quads is already a field of medea.Node)
 		sub_quads : null,
 
-		init : function(x, y, w, h) {
+		init : function(x, y, w) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
 			this.w = w === undefined ? 1 : w;
-			this.h = h === undefined ? 1 : h;
+			// TODO: get rid of 'h' everywhere. We only use square sizes.
+			this.h = w;
 
-			// TODO: get proper BB from lookup table
+			// Take the correct y bounding segment from the lookup table we generated
+			this.node_lod_level = log2(this.w);
+			var height_min_max = terrain_bounding_boxes[this.node_lod_level][this.y / this.w][this.x / this.w];
+
+			console.log(height_min_max[1]);
+
 			this.SetStaticBB(medea.CreateBB(
-				vec3.create([this.x * TILE_SIZE, 0, this.y * TILE_SIZE]),
-				vec3.create([(this.x + this.w) *  TILE_SIZE, 255, (this.y + this.h) *  TILE_SIZE])
+				vec3.create([this.x * TILE_SIZE, height_min_max[0] * TERRAIN_HEIGHT_SCALE, this.y * TILE_SIZE]),
+				vec3.create([(this.x + this.w) *  TILE_SIZE,
+							 height_min_max[1] * TERRAIN_HEIGHT_SCALE,
+							 (this.y + this.h) *  TILE_SIZE])
 			));
 		},
 
@@ -240,7 +319,7 @@ function on_init_context(terrain_image) {
 
 			// Attach the mesh to the scenegraph
 			this.Translate([xs, 0, ys]);
-			this.Scale([this.w, 0.7, this.h]);
+			this.Scale([this.w, TERRAIN_HEIGHT_SCALE, this.h]);
 			this.AddEntity(mesh);
 		},
 
