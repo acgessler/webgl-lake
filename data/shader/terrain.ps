@@ -15,8 +15,15 @@
 uniform vec3 LIGHT_D0_DIR;
 
 uniform sampler2D coarse_normal_texture;
-uniform sampler2D texture;
-uniform sampler2D normal_texture;
+
+uniform sampler2D ground_texture;
+uniform sampler2D ground_normal_texture;
+
+uniform sampler2D stone_texture;
+uniform sampler2D stone_normal_texture;
+
+uniform sampler2D grass_texture;
+uniform sampler2D snow_texture;
 
 #ifdef TERRAIN_SPECULAR
 uniform vec4 spec_color_shininess;
@@ -24,10 +31,11 @@ uniform vec4 spec_color_shininess;
 
 uniform vec4 terrain_uv_offset_scale;
 uniform float inv_terrain_map_dim;
+uniform float uv_scale;
 
 const float kDETAIL_NORMAL_STRENGTH = 0.6;
 const float kSPECULAR_STRENGTH = 0.2;
-const float kCOARSE_NORMAL_SCALE = 0.2;
+const float kCOARSE_NORMAL_SCALE = 0.18;
 const float kALL_SNOW_HEIGHT = 0.60;
 const float kSNOW_BEGIN = 0.55;
 
@@ -44,7 +52,7 @@ void main()
 	float noise = nor_occ.b;
 	nor_occ.b = 1.0;
 
-	uv *= 0.5;
+	uv *= uv_scale;
 
 	// Take the normal from rg, skew the angle a bit
 	// Note: for an unrotated terrain tile, tangent and world space
@@ -59,8 +67,8 @@ void main()
 	// Mix in the normal deltas from both maps.
 	// This now is an approximation to properly blending normals
 	// which is more than just an addition.
-	vec3 nor_base = texture2D(normal_texture, uv).rgb;
-	vec3 nor_rock = texture2D(normal_texture, uv + vec2(0.5, 0.0)).rgb;
+	vec3 nor_base = texture2D(ground_normal_texture, uv).rgb;
+	vec3 nor_rock = texture2D(stone_normal_texture, uv).rgb;
 	N += (mix(nor_rock, nor_base, rock_base_blend) - 0.5).rbg * 2.0 *
 		kDETAIL_NORMAL_STRENGTH;
 	N = normalize(N);
@@ -84,22 +92,22 @@ void main()
 #endif
 
 	// Get the diffuse base color by blending the color textures
-	vec3 tex_base = texture2D(texture, uv).rgb;
-	vec3 tex_rock = texture2D(texture, uv + vec2(0.5, 0.0)).rgb;
+	vec3 tex_base = texture2D(ground_texture, uv).rgb;
+	vec3 tex_rock = texture2D(stone_texture, uv).rgb;
 	tex_base *= tex_base; // Gamma
 	tex_rock *= tex_rock; // Gamma
 	vec3 tex = mix(tex_rock, tex_base, rock_base_blend);
 
 	float height = FetchVec4(eye_height).w;
 	if (height <= kSNOW_BEGIN) {
-		vec3 tex_green = texture2D(texture, uv + vec2(0.0, 0.5)).rgb;
+		vec3 tex_green = texture2D(grass_texture, uv).rgb;
 		tex_green *= tex_green; // Gamma
 
 		float d = max(0.0, 1.0 - rock_base_blend * rock_base_blend * noise);
 		tex = mix(tex_green, tex, d);
 	}
 	else {
-		vec3 tex_snow = texture2D(texture, uv + vec2(0.5, 0.5)).rgb;
+		vec3 tex_snow = texture2D(snow_texture, uv).rgb;
 		tex_snow *= tex_snow; // Gamma
 
 		float snow_transition = (kALL_SNOW_HEIGHT - height) / (kALL_SNOW_HEIGHT - kSNOW_BEGIN);
@@ -114,8 +122,9 @@ void main()
 #endif
 	;
 	vec3 fog_color = vec3(0.4,0.55,0.85);
+	float eye_height = eye.y / 300.0;
 	eye.y = 0.0;
-	float distance = clamp((dot(eye, eye) - 500000.0) / 2000000.0, 0.0, 1.0);
+	float distance = clamp((dot(eye, eye) - 500000.0) / (2000000.0 * eye_height), 0.0, 1.0);
 
 	// Assemble, Fog, Gamma
     gl_FragColor.a = 1.0;

@@ -4,8 +4,8 @@ var medea = null;
 var viewport = null;
 var root = null;
 
-var lod_attenuation = 0.4;
-var COUNT_LOD_LEVELS = 6;
+var lod_attenuation = 0.5;
+var COUNT_LOD_LEVELS = 9;
 
 function on_init_error() {
 	console.log("Failed to initialize");
@@ -16,15 +16,20 @@ function on_tick(dtime) {
 	return true;
 }
 
+function log2(x) {
+	return Math.log(x) / Math.log(2.0);
+}
+
 // Given an approximate |sq_distance| of an object, determine the
 // continuous LOD (CLOD) value for it. CLOD is in [0, COUNT_LOD_LEVELS[
 //
 // Must keep in sync with terrain.vs
 function calc_clod(sq_distance) {
-	var log_distance = Math.log(sq_distance / (16.0 * 16.0)) * 0.5 * lod_attenuation / Math.log(2);
+	var log_distance = log2(sq_distance * 2.0 / (16.0 * 16.0)) * 0.5 * lod_attenuation;
 	return Math.max(0, Math.min(COUNT_LOD_LEVELS - 1,
 		log_distance));
 }
+
 
 // Invoked once the medea context (global |medea|) is ready to use
 function on_init_context(terrain_image) {
@@ -98,7 +103,13 @@ function on_init_context(terrain_image) {
 
 			// TODO: instead of assuming y==0 (what the shader
 			// currently does, assume the center of the BB)
+
+			// For the purpose of LOD calculation, the camera position
+			// is always rounded to be at the center of the current
+			// tile.
+			cam_pos[0] = (Math.floor(cam_pos[0] / TILE_SIZE) + 0.5) * TILE_SIZE;
 			cam_pos[1] = 0.0;
+			cam_pos[2] = (Math.floor(cam_pos[2] / TILE_SIZE) + 0.5) * TILE_SIZE;
 			var corners = [
 				[vmin[0], 0, vmin[2]],
 				[vmin[0], 0, vmax[2]],
@@ -121,11 +132,13 @@ function on_init_context(terrain_image) {
 			//clod_min = Math.floor(clod_min);
 			//clod_max = Math.ceil(clod_max);
 			var clod_delta = clod_max - clod_min;
-			if (clod_delta >= 0.5 && can_subdivide) {
+
+			var can_satisfy_lod = clod_min - Math.floor(Math.log(this.w) / Math.log(2)) >= 0;
+			if ((clod_delta >= 1.0 || !can_satisfy_lod) && can_subdivide) {
 				this._Subdivide();
 			}
 			else {
-				this._RenderAsSingleTile(clod_min);
+				this._RenderAsSingleTile(clod_min, cam_pos);
 			}
 		},
 
@@ -164,7 +177,8 @@ function on_init_context(terrain_image) {
 				this.AddChild(this.draw_tile);
 			}
 
-			this.draw_tile.SetLODRange(Math.floor(clod_min), Math.floor(clod_min)+ 1);
+			var clod_adjusted = Math.floor(clod_min);
+			this.draw_tile.SetLODRange(clod_adjusted, clod_adjusted + 1);
 
 			// Enable the TerrainTile, disable the 4 sub-quads
 			this.draw_tile.Enabled(true);
@@ -212,9 +226,8 @@ function on_init_context(terrain_image) {
 			// that doesn't match LOD assignment for tiles with w > 1.
 			var outer = this;
 			mesh._ComputeLODLevel = function() {
-				var lod = Math.floor(outer.lod_min - Math.log(outer.w) / Math.log(2.0));
+				var lod = Math.floor(outer.lod_min - log2(outer.w));
 				//console.assert(lod >= 0, "invariant");
-				//return 0;
 				return Math.max(0,lod);
 			};
 			var xs = this.x * TILE_SIZE;
@@ -223,6 +236,7 @@ function on_init_context(terrain_image) {
 			var hs = this.h * TILE_SIZE;
 
 			material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
+			material.Pass(0).Set("uv_scale", this.w);
 
 			// Attach the mesh to the scenegraph
 			this.Translate([xs, 0, ys]);
@@ -242,7 +256,7 @@ function on_init_context(terrain_image) {
 			var mesh = medea.CreateFlatTerrainTileMesh(this._GetPrototypeTerrainMaterial(),
 				TILE_SIZE,
 				TILE_SIZE,
-				COUNT_LOD_LEVELS,
+				Math.min(COUNT_LOD_LEVELS, log2(TILE_SIZE)),
 				true /* No UVS */);
 
 			// TODO: calculate proper bounding box
@@ -256,8 +270,15 @@ function on_init_context(terrain_image) {
 				// TERRAIN_SPECULAR
 				// spec_color_shininess : [1,1,1,32],
 				coarse_normal_texture : 'url:data/textures/heightmap0-nm_NRM.png',
-				normal_texture : 'url:data/textures/concrete-51_NM.png',
-				texture : 'url:data/textures/concrete-51.png',
+
+				ground_texture: 'url:data/textures/terrain_detail_a.jpg',
+				ground_normal_texture: 'url:data/textures/terrain_detail_a_NRM.png',
+
+				stone_texture: 'url:data/textures/terrain_detail_b.jpg',
+				stone_normal_texture: 'url:data/textures/terrain_detail_b_NRM.png',
+
+				grass_texture: 'url:data/textures/terrain_detail_d.jpg',
+				snow_texture: 'url:data/textures/terrain_detail_c.jpg',
 
 				inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
 
@@ -314,7 +335,7 @@ function on_init_context(terrain_image) {
 	water.Translate([1024, 31.01, 1024]);
     water.Scale(1024);
 
-
+/*
     var mesh_parent = medea.CreateNode();
 	medea.LoadSceneFromResource('url:data/meshes/tree5.json', mesh_parent, null, function(st) {
 		if (st == medea.SCENE_LOAD_STATUS_GEOMETRY_FINISHED) {
@@ -329,11 +350,13 @@ function on_init_context(terrain_image) {
 
 			//medea.CloneNode(mesh_parent);
 		}
-	});
+	}); */
 
 
 	root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32));
-   
+   	//root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32)).Translate([2048,0,2048]);
+   	//root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32)).Translate([0,0,2048]);
+   	//root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32)).Translate([2048,0,0]);
 
 
 

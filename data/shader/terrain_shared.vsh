@@ -2,6 +2,7 @@
 #define INCLUDED_TERRAIN_SHARED
 
 uniform sampler2D heightmap;
+
 uniform vec4 terrain_uv_offset_scale;
 uniform highp vec4 lod_range;
 uniform float inv_terrain_map_dim;
@@ -9,11 +10,11 @@ uniform float lod_attenuation;
 
 
 const float kMIN_LOD = 0.0;
-const float kMAX_LOD = 5.0;
+const float kMAX_LOD = 8.0;
 
 
 float CalcLOD(highp vec3 world_eye) {
-	highp float lod = log(dot(world_eye, world_eye) / (16.0 * 16.0)) * lod_attenuation * 0.5 / log(2.0);
+	highp float lod = log(dot(world_eye, world_eye) * 2.0 / (16.0 * 16.0)) * lod_attenuation * 0.5 / log(2.0);
 	return clamp(lod, kMIN_LOD, kMAX_LOD);
 }
 
