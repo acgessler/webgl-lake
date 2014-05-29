@@ -33,7 +33,7 @@ uniform vec4 terrain_uv_offset_scale;
 uniform float inv_terrain_map_dim;
 uniform float uv_scale;
 
-const float kDETAIL_NORMAL_STRENGTH = 0.6;
+const float kDETAIL_NORMAL_STRENGTH = 0.4;
 const float kSPECULAR_STRENGTH = 0.2;
 const float kCOARSE_NORMAL_SCALE = 0.18;
 const float kALL_SNOW_HEIGHT = 0.60;
@@ -42,6 +42,8 @@ const float kSNOW_BEGIN = 0.55;
 void main()
 {
 	vec2 uv = FetchTexCoord();
+	vec3 eye = FetchVec4(eye_height).xyz;
+	float eye_sq_distance = dot(eye, eye);
 
 	// Fetch normal, height and occlusion from RGBA normal map
 	vec4 nor_occ = texture2D(coarse_normal_texture,
@@ -67,7 +69,11 @@ void main()
 	// Mix in the normal deltas from both maps.
 	// This now is an approximation to properly blending normals
 	// which is more than just an addition.
-	vec3 nor_base = texture2D(ground_normal_texture, uv).rgb;
+	vec3 nor_base =
+	mix(
+			texture2D(ground_normal_texture, uv).rgb,
+			texture2D(ground_normal_texture, uv * 0.5).rgb,
+			clamp(eye_sq_distance / 400000.0, 0.0, 1.0));
 	vec3 nor_rock = texture2D(stone_normal_texture, uv).rgb;
 	N += (mix(nor_rock, nor_base, rock_base_blend) - 0.5).rbg * 2.0 *
 		kDETAIL_NORMAL_STRENGTH;
@@ -79,7 +85,6 @@ void main()
 	// Apply ambient occlusion
 	diffuse = diffuse * nor_occ.a;
 
-	vec3 eye = FetchVec4(eye_height).xyz;
 #ifdef TERRAIN_SPECULAR
 	// Specular contribution: simple blinn with self-shadowing
 	float specular = ComputeBlinnSpecularCoeff(
@@ -100,7 +105,14 @@ void main()
 
 	float height = FetchVec4(eye_height).w;
 	if (height <= kSNOW_BEGIN) {
-		vec3 tex_green = texture2D(grass_texture, uv).rgb;
+		// Sampling distance grass with 0.5 the resolution looks
+		// as if the ground was populated by shrubs, which is
+		// nice. It also aways the otherwise strongly repeating
+		// patterns of green.
+		vec3 tex_green = mix(
+			texture2D(grass_texture, uv * 2.0).rgb,
+			texture2D(grass_texture, uv * 0.5).rgb,
+			clamp(eye_sq_distance / 400000.0, 0.0, 1.0));
 		tex_green *= tex_green; // Gamma
 
 		float d = max(0.0, 1.0 - rock_base_blend * rock_base_blend * noise);
@@ -111,7 +123,7 @@ void main()
 		tex_snow *= tex_snow; // Gamma
 
 		float snow_transition = (kALL_SNOW_HEIGHT - height) / (kALL_SNOW_HEIGHT - kSNOW_BEGIN);
-		tex = mix(tex_snow, tex, min(1.0, max(-0.5, snow_transition + rock_base_blend * 0.5)));
+		tex = mix(tex_snow, tex, clamp(snow_transition + rock_base_blend * 0.5, -0.5, 1.0));
 	}
 
 
@@ -122,9 +134,9 @@ void main()
 #endif
 	;
 	vec3 fog_color = vec3(0.4,0.55,0.85);
-	float eye_height = eye.y / 300.0;
+	float eye_height = eye.y / 600.0;
 	eye.y = 0.0;
-	float distance = clamp((dot(eye, eye) - 500000.0) / (2000000.0 * eye_height), 0.0, 1.0);
+	float distance = (eye_sq_distance - 500000.0) / (2000000.0 * max(1.0, eye_height));
 
 	// Assemble, Fog, Gamma
     gl_FragColor.a = 1.0;

@@ -142,8 +142,6 @@ function on_init_context(terrain_image) {
 			this.node_lod_level = log2(this.w);
 			var height_min_max = terrain_bounding_boxes[this.node_lod_level][this.y / this.w][this.x / this.w];
 
-			console.log(height_min_max[1]);
-
 			this.SetStaticBB(medea.CreateBB(
 				vec3.create([this.x * TILE_SIZE, height_min_max[0] * TERRAIN_HEIGHT_SCALE, this.y * TILE_SIZE]),
 				vec3.create([(this.x + this.w) *  TILE_SIZE,

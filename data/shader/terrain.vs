@@ -26,6 +26,8 @@ void main()
 	float height = ComputeHeightAt(position, vec3(world_eye.x, 0.0, world_eye.z), uv);
 	position.y = height * 255.0;
 
+	world_eye = CAM_POS - ModelToWorldSpace(position);
+
 	// Forward final position and computed UV to PS
 	PassClipPosition(ModelToClipSpace(position));
 	PassTexCoord(uv);
