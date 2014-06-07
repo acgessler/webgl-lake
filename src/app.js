@@ -9,7 +9,15 @@ var lod_attenuation = 0.5;
 var COUNT_LOD_LEVELS = 9;
 var TILE_SIZE = 64;
 var TERRAIN_PLANE_WIDTH = 2048;
-var TERRAIN_HEIGHT_SCALE = 0.65;
+var TERRAIN_PLANE_OFFSET = -TERRAIN_PLANE_WIDTH / 2;
+var RADIUS = 1024;
+var TREE_MAP_WIDTH = 512; // terrain % trees == 0
+
+// Tree billboard height over width
+var TREE_WIDTH = 2.6;
+var TREE_ASPECT = 2.3;
+
+var TERRAIN_HEIGHT_SCALE = 1.0;
 
 function on_init_error() {
 	console.log("Failed to initialize");
@@ -99,9 +107,235 @@ function compute_bounding_boxes(terrain_image) {
 	return bbs;
 }
 
+function compute_tree_mesh(terrain_image, tree_image) {
+	var data = tree_image.GetData(), w = tree_image.GetWidth(), h = tree_image.GetHeight();
+	var height_data = terrain_image.GetData();
+
+	var size_ratio = TERRAIN_PLANE_WIDTH / TREE_MAP_WIDTH;
+	var tree_height = TREE_WIDTH * TREE_ASPECT;
+
+	// For now, collect complete billboards for all trees.
+	// TODO: use instancing to merge position and UV
+	var c = 0;
+	var tree_count = 0;
+	for (var y = 0; y < h; ++y) {
+		for (var x = 0; x < w; ++x, c += 4) {
+			if (data[c + 3] !== 0) {
+				++tree_count;
+			}
+		}
+	}
+
+	console.log('Totally ' + tree_count + ' trees');
+
+	// Emit full vertices and do not use an index buffer. This
+	// looses us the vertex cache effect, making vertex processing
+	// an estimated 33% slower for trees (which is bad because it
+	// does the billboard alignment at vertex stage). On the other
+	// side, they don't all fit into one IBO.
+	//
+	// Estimated size of this VB is ~ 20MB which might pose a
+	// problem on some hardware.
+	var pos = new Float32Array(tree_count * 6 * 3);
+	var uv = new Float32Array(tree_count * 6 * 2);
+	var pos_cur = 0;
+	var uv_cur = 0;
+	c = 0;
+	for (var y = 0; y < h; ++y) {
+		
+		for (var x = 0; x < w; ++x, c += 4) {
+			if (data[c + 3] === 0) {
+				continue;
+			}
+
+			// Place each tree in a tight distribution around its spot in the grid
+			var rand = Math.random();
+			rand *= rand;
+			rand = rand * 0.5 + 0.5;
+			var xofs = size_ratio * rand;
+			var yofs = size_ratio * rand;
+
+			var xpos = x * size_ratio + xofs;
+			var ypos = y * size_ratio + yofs;
+
+			var height_base = Math.floor(ypos) * (w * size_ratio);
+			var terrain_height = height_data[(height_base + Math.floor(xpos)) * 4] *
+				TERRAIN_HEIGHT_SCALE;
+
+			for (var i = 0; i < 6; ++i) {
+				pos[pos_cur++] = xpos;
+				// Add slight variation in height as well
+				pos[pos_cur++] = terrain_height + (i >= 2 && i <= 4 ? tree_height : 0) * (1.0 + rand * 0.2);
+				pos[pos_cur++] = ypos;
+			}
+
+			uv[uv_cur++] = 0.0;
+			uv[uv_cur++] = 0.0;
+
+			uv[uv_cur++] = 1.0;
+			uv[uv_cur++] = 0.0;
+
+			uv[uv_cur++] = 1.0;
+			uv[uv_cur++] = 1.0;
+
+			uv[uv_cur++] = 1.0;
+			uv[uv_cur++] = 1.0;
+
+			uv[uv_cur++] = 0.0;
+			uv[uv_cur++] = 1.0;
+
+			uv[uv_cur++] = 0.0;
+			uv[uv_cur++] = 0.0;
+		}
+	}
+
+	var vertex_channels = {
+		positions: pos,
+		uvs : [uv]
+	};
+
+	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/tree_billboard', {
+		texture : medea.CreateTexture('url:/data/textures/pine_billboard.png', null,
+			medea.TEXTURE_PREMULTIPLIED_ALPHA),
+		scaling : TREE_WIDTH
+	});
+	var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
+	mesh.Material().Pass(0).SetDefaultAlphaBlending();
+	mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
+	return mesh;
+}
+
+var GRASS_TILE_SIZE = TILE_SIZE * 1.5;
+
+// Number of blades per grass unit
+var GRASS_BLADE_COUNT = 3;
+
+function build_grass_mesh() {
+	var threshold = GRASS_TILE_SIZE * GRASS_TILE_SIZE;
+	var unit_count = 0;
+	for (var y = 0; y < GRASS_TILE_SIZE; ++y) {
+		for (var x = 0; x < GRASS_TILE_SIZE; ++x) {
+			if (x*x + y*y > threshold) {
+				continue;
+			}
+			++unit_count;
+		}
+	}
+
+	// TODO: this should use instancing to supply the positions
+	var pos = new Float32Array(unit_count * GRASS_BLADE_COUNT * 6 * 3);
+	var uv = new Float32Array(unit_count * GRASS_BLADE_COUNT * 6 * 2);
+	var pos_cur = 0;
+	var uv_cur = 0;
+	for (var y = 0; y < GRASS_TILE_SIZE; ++y) {
+		for (var x = 0; x < GRASS_TILE_SIZE; ++x) {
+			if (x*x + y*y > threshold) {
+				continue;
+			}
+			
+			for (var i = 0; i < GRASS_BLADE_COUNT; ++i) {
+
+			}
+		}
+	}
+
+	var vertex_channels = {
+		positions: pos,
+		uvs : [uv]
+	};
+
+	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/grass', {
+		texture : medea.CreateTexture('url:/data/textures/grass1.png', null
+			/*,medea.TEXTURE_PREMULTIPLIED_ALPHA*/)
+	});
+	var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
+	mesh.Material().Pass(0).SetDefaultAlphaBlending();
+	mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
+}
+
+
+// Return the prototype mesh for drawing a terrain surface with VTF-based
+// height (i.e the mesh is a flat grid with y==0). This mesh
+// is never used for drawing, but tiles use CloneMesh()
+// to get independent copies.
+var get_prototype_terrain_mesh = medealib.Cached(function() {
+	var mesh = medea.CreateFlatTerrainTileMesh(get_prototype_terrain_material(),
+		TILE_SIZE,
+		TILE_SIZE,
+		Math.min(COUNT_LOD_LEVELS, log2(TILE_SIZE)),
+		true /* No UVS */);
+
+	// TODO: calculate proper bounding box
+	mesh.BB(medea.CreateBB([0, 0, 0], [TILE_SIZE, 255, TILE_SIZE]));
+	mesh.LODAttenuationScale(lod_attenuation);
+	return mesh;
+});
+
+// Return the prototype material for drawing terrain. This material
+// is never used for drawing, but terrain tiles use CloneMaterial()
+// to get independent copies.
+var get_prototype_terrain_material = medealib.Cached(function() {
+	var constants = {
+		// TERRAIN_SPECULAR
+		// spec_color_shininess : [1,1,1,32],
+		coarse_normal_texture : 'url:data/textures/heightmap0-nm_NRM.png',
+		fine_normal_texture : 'url:data/textures/heightmap0-nm_NRM_2.png',
+
+		ground_texture: 'url:data/textures/terrain_detail_a.jpg',
+		ground_normal_texture: 'url:data/textures/terrain_detail_a_NRM.png',
+
+		stone_texture: 'url:data/textures/terrain_detail_b.jpg',
+		stone_normal_texture: 'url:data/textures/terrain_detail_b_NRM.png',
+
+		grass_texture: 'url:data/textures/terrain_detail_d.jpg',
+		snow_texture: 'url:data/textures/terrain_detail_c.jpg',
+
+		inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
+
+		// Use a function setter to update tweakables every frame
+		lod_attenuation : function() {
+			return lod_attenuation;
+		},
+
+		// The heightmap needs custom parameters so we need to load it
+		// manually (this is no overhead, specifying a URL for a texture
+		// constant directly maps to medea.CreateTexture on that URL)
+		heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
+			// We don't need MIPs for the heightmap anyway
+			medea.TEXTURE_FLAG_NO_MIPS | 
+			// Also, only one channel is required
+			medea.TEXTURE_FORMAT_LUM |
+			// Hint to medea that the texture will be accessed
+			// from within a vertex shader.
+			medea.TEXTURE_VERTEX_SHADER_ACCESS),
+	};	
+	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
+	mat.SetIgnoreUniformVarLocationNotFound();
+	return mat;
+});
+
+// Return the prototype material for drawing water. This material
+// is never used for drawing, but water tiles use CloneMaterial()
+// to get independent copies.
+var get_prototype_water_material = medealib.Cached(function() {
+	var water_material = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/water', {
+			texture : 'url:/data/textures/water.jpg',
+			// Allocate the heightmap again, this time with MIPs as we'll otherwise suffer from aliasing
+			heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
+					// Only one channel is required
+					medea.TEXTURE_FORMAT_LUM),
+			spec_color_shininess : [0.95, 0.95, 1.0, 32.0],
+			inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH
+		}
+	);
+	water_material.Pass(0).SetDefaultAlphaBlending();
+	return water_material;
+});
+
 // Invoked once the medea context (global |medea|) is ready to use
-function on_init_context(terrain_image) {
+function on_init_context(terrain_image, tree_image) {
 	var terrain_bounding_boxes = compute_bounding_boxes(terrain_image);
+	var tree_mesh = compute_tree_mesh(terrain_image, tree_image);
 
 	// Adaptive Quad-Tree node to dynamically subdivide the terrain.
 	//
@@ -127,27 +361,92 @@ function on_init_context(terrain_image) {
 		draw_tile : null,
 
 		// Child nodes
-		// (sub_quads is already a field of medea.Node)
+		// (children is already a field of medea.Node)
 		sub_quads : null,
 
-		init : function(x, y, w) {
+		// Whether the world transformation for this
+		// treenode requires all of its meshes to be
+		// rendered with reversed culling.
+		is_back : false,
+
+		init : function(x, y, w, is_back) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
 			this.w = w === undefined ? 1 : w;
 			// TODO: get rid of 'h' everywhere. We only use square sizes.
 			this.h = w;
+			this.is_back = is_back;
 
-			// Take the correct y bounding segment from the lookup table we generated
+			if (this.w === 32) {
+				this.AddEntity(tree_mesh);
+				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h));
+			}
+
 			this.node_lod_level = log2(this.w);
-			var height_min_max = terrain_bounding_boxes[this.node_lod_level][this.y / this.w][this.x / this.w];
 
-			this.SetStaticBB(medea.CreateBB(
-				vec3.create([this.x * TILE_SIZE, height_min_max[0] * TERRAIN_HEIGHT_SCALE, this.y * TILE_SIZE]),
-				vec3.create([(this.x + this.w) *  TILE_SIZE,
-							 height_min_max[1] * TERRAIN_HEIGHT_SCALE,
-							 (this.y + this.h) *  TILE_SIZE])
-			));
+			// There are two reasons why we need to override medea's
+			// automatic BB calculation:
+			//
+			// - quadtree nodes are added lazily, so initially everything is
+			//   empty. Nothing would get drawn, and the quadtree would
+			//   therefore not get further subdivided.
+			// - The transformation to spherical shape is applied external to
+			//   medea's transformation system (since the transformation
+			//   is non-linear), so BB calculation would give wrong results.
+			this._CalculateStaticBB();
+		},
+
+		_CalculateStaticBB : function() {
+			// Take the correct y bounding segment from the lookup table we generated
+			// This gives a basic bounding box.
+			var height_min_max = terrain_bounding_boxes[this.node_lod_level]
+				[this.y / this.w][this.x / this.w];
+
+			var a = vec3.create([this.x * TILE_SIZE,
+				height_min_max[0] * TERRAIN_HEIGHT_SCALE,
+				this.y * TILE_SIZE]);
+			var b = vec3.create([(this.x + this.w) *  TILE_SIZE,
+				 height_min_max[1] * TERRAIN_HEIGHT_SCALE,
+				 (this.y + this.h) *  TILE_SIZE]);
+			
+			// Now transform this AABB by the sphere shape
+			//
+			// Note that static BBs are still multiplied with
+			// the node's world transformation, i.e. the orientation
+			// terrain plane need not to be taken into account.
+			var scratch = vec3.create();
+			var vmin = vec3.create();
+			vmin[0] = 1e10;
+			vmin[1] = 1e10;
+			vmin[2] = 1e10;
+			var vmax = vec3.create();
+			vmax[0] = -1e10;
+			vmax[1] = -1e10;
+			vmax[2] = -1e10;
+			for (var z = 0; z < 2; ++z) {
+				for (var y = 0; y < 2; ++y) {
+					for (var x = 0; x < 2; ++x) {
+						scratch[0] = (x ? b : a)[0] + TERRAIN_PLANE_OFFSET;
+						scratch[1] = 0;
+						scratch[2] = (z ? b : a)[2] + TERRAIN_PLANE_OFFSET;
+
+						vec3.normalize(scratch);
+
+						var height = (y ? b : a)[1] + RADIUS;
+						scratch[0] *= height;
+						scratch[1] *= height;
+						scratch[2] *= height;
+
+						for (var i = 0; i < 3; ++i) {
+							vmin[i] = Math.min(vmin[i], scratch[i]);
+							vmax[i] = Math.max(vmax[i], scratch[i]);
+						}
+					}
+				}
+			}
+
+			this.SetStaticBB(medea.CreateBB(vmin, vmax));
 		},
 
 		// This is a Render() operation (not Update) since the terrain
@@ -226,11 +525,11 @@ function on_init_context(terrain_image) {
 				var x = this.x;
 				var y = this.y;
 				var w = this.w / 2;
-				var h = this.h / 2;
-				sub_quads[0] = new TerrainQuadTreeNode(x    , y    , w, h);
-				sub_quads[1] = new TerrainQuadTreeNode(x + w, y    , w, h);
-				sub_quads[2] = new TerrainQuadTreeNode(x    , y + h, w, h);
-				sub_quads[3] = new TerrainQuadTreeNode(x + w, y + h, w, h);
+				var is_back = this.is_back;
+				sub_quads[0] = new TerrainQuadTreeNode(x    , y    , w, is_back);
+				sub_quads[1] = new TerrainQuadTreeNode(x + w, y    , w, is_back);
+				sub_quads[2] = new TerrainQuadTreeNode(x    , y + w, w, is_back);
+				sub_quads[3] = new TerrainQuadTreeNode(x + w, y + w, w, is_back);
 
 				this.AddChild(sub_quads[0]);
 				this.AddChild(sub_quads[1]);
@@ -250,7 +549,7 @@ function on_init_context(terrain_image) {
 
 		_RenderAsSingleTile : function(clod_min) {
 			if (this.draw_tile === null) {
-				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h);
+				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back);
 				this.AddChild(this.draw_tile);
 			}
 
@@ -269,6 +568,51 @@ function on_init_context(terrain_image) {
 		},
 	});
 
+
+	// Leaf that actually draws a water tile (of any power-of-two) size.
+	// Water is usually drawn at a higher LOD than normal terrain tiles.
+	var WaterTile = medea.Node.extend({
+		x : 0,
+		y : 0,
+		w : 1,
+		h : 1,
+
+		mesh : null,
+
+		init : function(x, y, w, h, is_back) {
+			this._super();
+			this.x = x | 0;
+			this.y = y | 0;
+			this.w = w === undefined ? 1 : w;
+			this.h = h === undefined ? 1 : h;
+			this.is_back = is_back;
+
+			var xs = this.x * TILE_SIZE;
+			var ys = this.y * TILE_SIZE;
+			var ws = this.w * TILE_SIZE;
+			var hs = this.h * TILE_SIZE;
+
+			// Attach the mesh to the scenegraph and position the tile correctly
+			this.Translate([xs, 0, ys]);
+			this.Scale([this.w, TERRAIN_HEIGHT_SCALE, this.h]);
+			
+			var water_material = medea.CloneMaterial(get_prototype_water_material());
+			water_material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
+			var water_mesh = medea.CloneMesh(get_prototype_terrain_mesh(), water_material);
+			// The terrain mesh is a LOD mesh, but water gets drawn at LOD0
+			water_mesh._ComputeLODLevel = function() {
+				return 0;
+			};
+			water_mesh.RenderQueue(medea.RENDERQUEUE_ALPHA_EARLY);
+
+			water_mesh.Material().Pass(0).CullFace(false);
+			this.AddEntity(water_mesh);
+			this.SetStaticBB(medea.BB_INFINITE);
+		},
+	});
+
+	// Leaf that actually draws a terrain tile (of any power-of-two size)
+	// Could be part of TerrainQuadTreeNode, but factored out to keep things easy.
 	var TerrainTile = medea.Node.extend({
 		x : 0,
 		y : 0,
@@ -279,12 +623,15 @@ function on_init_context(terrain_image) {
 		lod_min : -1,
 		lod_max : -1,
 
-		init : function(x, y, w, h) {
+		is_back : false,
+
+		init : function(x, y, w, h, is_back) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
 			this.w = w === undefined ? 1 : w;
 			this.h = h === undefined ? 1 : h;
+			this.is_back = is_back;
 
 			var outer = this;
 
@@ -292,12 +639,12 @@ function on_init_context(terrain_image) {
 			// that has its own set of constants but shares other
 			// rendering state. This will minimize the number of state
 			// changes required to draw multiple tiles.
-			var material = medea.CloneMaterial(this._GetPrototypeTerrainMaterial(), 
+			var material = medea.CloneMaterial(get_prototype_terrain_material(), 
 				medea.MATERIAL_CLONE_COPY_CONSTANTS | medea.MATERIAL_CLONE_SHARE_STATE);
 
 			// Create a clone of the mesh prototype and assign the cloned
 			// material to it.
-			var mesh = this.mesh = medea.CloneMesh(this._GetPrototypeTerrainTileMesh(), material);
+			var mesh = this.mesh = medea.CloneMesh(get_prototype_terrain_mesh(), material);
 
 			// The default LOD mesh assigns LOD based on a stock formula
 			// that doesn't match LOD assignment for tiles with w > 1.
@@ -314,8 +661,10 @@ function on_init_context(terrain_image) {
 
 			material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
 			material.Pass(0).Set("uv_scale", this.w);
+			material.Pass(0).CullFaceMode(is_back ? "back" : "front");
+			material.Pass(0).CullFace(false);
 
-			// Attach the mesh to the scenegraph
+			// Attach the mesh to the scenegraph and position the tile correctly
 			this.Translate([xs, 0, ys]);
 			this.Scale([this.w, TERRAIN_HEIGHT_SCALE, this.h]);
 			this.AddEntity(mesh);
@@ -327,59 +676,6 @@ function on_init_context(terrain_image) {
 			this.lod_max = lod_max;
 			this.mesh.Material().Pass(0).Set("lod_range", [lod_min, lod_max, 1 << lod_min, 1 << lod_max]);
 		},
-
-
-		_GetPrototypeTerrainTileMesh : medealib.Cached(function() {
-			var mesh = medea.CreateFlatTerrainTileMesh(this._GetPrototypeTerrainMaterial(),
-				TILE_SIZE,
-				TILE_SIZE,
-				Math.min(COUNT_LOD_LEVELS, log2(TILE_SIZE)),
-				true /* No UVS */);
-
-			// TODO: calculate proper bounding box
-			mesh.BB(medea.CreateBB([0, 0, 0], [TILE_SIZE, 255, TILE_SIZE]));
-			mesh.LODAttenuationScale(lod_attenuation);
-			return mesh;
-		}),
-
-		_GetPrototypeTerrainMaterial : medealib.Cached(function() {
-			var constants = {
-				// TERRAIN_SPECULAR
-				// spec_color_shininess : [1,1,1,32],
-				coarse_normal_texture : 'url:data/textures/heightmap0-nm_NRM.png',
-
-				ground_texture: 'url:data/textures/terrain_detail_a.jpg',
-				ground_normal_texture: 'url:data/textures/terrain_detail_a_NRM.png',
-
-				stone_texture: 'url:data/textures/terrain_detail_b.jpg',
-				stone_normal_texture: 'url:data/textures/terrain_detail_b_NRM.png',
-
-				grass_texture: 'url:data/textures/terrain_detail_d.jpg',
-				snow_texture: 'url:data/textures/terrain_detail_c.jpg',
-
-				inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
-
-				// Use a function setter to update tweakables every frame
-				lod_attenuation : function() {
-					return lod_attenuation;
-				},
-
-				// The heightmap needs custom parameters so we need to load it
-				// manually (this is no overhead, specifying a URL for a texture
-				// constant directly maps to medea.CreateTexture on that URL)
-				heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
-					// We don't need MIPs for the heightmap anyway
-					medea.TEXTURE_FLAG_NO_MIPS | 
-					// Also, only one channel is required
-					medea.TEXTURE_FORMAT_LUM |
-					// Hint to medea that the texture will be accessed
-					// from within a vertex shader.
-					medea.TEXTURE_VERTEX_SHADER_ACCESS),
-			};	
-			var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
-			mat.SetIgnoreUniformVarLocationNotFound();
-			return mat;
-		}),
 	});
 
 	console.log("Context created, setting up scene");
@@ -388,29 +684,10 @@ function on_init_context(terrain_image) {
 	
 	root = medea.RootNode();
 	var light = medea.CreateNode();
-	light.AddEntity(medea.CreateDirectionalLight([1,1,1], [0.6, -1,-0.8]));
+	var light_entity = medea.CreateDirectionalLight([1,1,1], [0.7, -1.0,-0.7]);
+	light.AddEntity(light_entity);
 	root.AddChild(light);
 
-	var water = root.AddChild();
-	var water_material = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/water', {
-			texture : 'url:/data/textures/water.jpg',
-			// Allocate the heightmap again, this time with MIPs as we'll otherwise suffer from aliasing
-			heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
-					// Only one channel is required
-					medea.TEXTURE_FORMAT_LUM),
-			spec_color_shininess : [0.95, 0.95, 1.0, 32.0]
-		}
-	);
-	water_material.Pass(0).SetDefaultAlphaBlending();
-
-	var water_mesh = medea.CreateStandardMesh_Plane(water_material);
-	water_mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
-
-	water_mesh.Material().Pass(0).CullFace(false);
-	water.AddEntity(water_mesh);
-	
-	water.Translate([1024, 31.01, 1024]);
-    water.Scale(1024);
 
 /*
     var mesh_parent = medea.CreateNode();
@@ -429,12 +706,27 @@ function on_init_context(terrain_image) {
 		}
 	}); */
 
+	var axes = [
+		[1, 0, 0],
+		[0, 1, 0],
+		[0, 0, 1],
+	];
 
-	root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32));
-   	//root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32)).Translate([2048,0,2048]);
-   	//root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32)).Translate([0,0,2048]);
-   	//root.AddChild(new TerrainQuadTreeNode(0, 0, 32, 32)).Translate([2048,0,0]);
-
+	for (var i = 1; i < 2; ++i) {
+		var is_back = i >= 3;
+		var plane = new TerrainQuadTreeNode(0, 0, 32, is_back);
+		plane.Translate([TERRAIN_PLANE_OFFSET, 0, TERRAIN_PLANE_OFFSET]);
+		var plane_anchor = medea.CreateNode();
+		plane_anchor.Rotate(Math.PI * 0.5, axes[i % 3]);
+		if ( is_back ) {
+			// Mirroring on 3 axes means that all faces need
+			// to be rendered with reverse face winding.
+			plane_anchor.Scale(-1);
+		}
+		plane_anchor.Translate([0, TERRAIN_PLANE_WIDTH / 2, 0]);
+		plane_anchor.AddChild(plane);
+		root.AddChild(plane_anchor);
+	}
 
 
 	// Add the skydome, as in the previous sample
@@ -449,15 +741,27 @@ function on_init_context(terrain_image) {
 		var cam = medea.CreateCameraNode();
 		root.AddChild(cam);
 		viewport.Camera(cam);
+		//cam.Culling(false);
 		
-		cam.Translate(vec3.create([1024,75,1024]));
+		cam.Translate(vec3.create([1900,1900,1900]));
 		var cc = medea.CreateCamController('fps');
+		cc.WalkSpeed(25);
         cam.AddEntity(cc);
 		cc.Enable();
 	});
 
+	var input_handler = medea.CreateInputHandler();
+	var light_rotation_matrix = mat4.identity(mat4.create());
+	var light_temp_dir = [0.0, 0.0, 0.0, 0.0];
+	mat4.rotate(light_rotation_matrix, 3.1415 * 2.0 / 24.0, [0.6, 0.0, 0.6]);
 	medea.SetTickCallback(function(dtime) {
 		on_tick(dtime);
+
+		if(input_handler.ConsumeKeyDown(medea.KeyCode.ENTER)) {
+			var dir = light_entity.Direction();
+			mat4.multiplyVec4(light_rotation_matrix, [dir[0], dir[1], dir[2], 0.0], light_temp_dir);
+            light_entity.Direction([light_temp_dir[0], light_temp_dir[1], light_temp_dir[2]]);
+        }
 		return true;
 	});	
 
@@ -465,15 +769,13 @@ function on_init_context(terrain_image) {
 		var f1 = medea.debug_panel.gui.addFolder('Terrain');
 		f1.add(this, 'lod_attenuation');
 	});
-
-	
     
     console.log("Starting main loop");
 	medea.Start();
 }
 
 function run() {
-	var deps = ['input', 'material', 'standardmesh', 'forwardrenderer', 'light', 'debug', 'terraintile', 'sceneloader'];
+	var deps = ['input', 'material', 'standardmesh', 'forwardrenderer', 'light', 'debug', 'terraintile', 'sceneloader', 'input_handler', 'keycodes'];
 	medealib.CreateContext('game_container', {dataroot: '../medea/data'}, deps, function(_medea) {
 		
 		// We only create one medea instance so make it global
@@ -481,7 +783,9 @@ function run() {
 
 		// Load the terrain base image
 		medea.CreateImage('url:data/textures/heightmap0.png', function(img) {
-			on_init_context(img);
+			medea.CreateImage('url:data/textures/treemap.png', function(tree_img) {
+				on_init_context(img, tree_img);
+			});
 		});
 	}, on_init_error);
 }

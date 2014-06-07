@@ -51,6 +51,6 @@ void main()
 
 	// Assemble, Fog, Gamma
     gl_FragColor.a = 0.65;
-	gl_FragColor.rgb = sqrt(mix(color, fog_color, clamp(distance, 0.0, 1.0)));
+	gl_FragColor.rgb = 0.65 * sqrt(mix(color, fog_color, clamp(distance, 0.0, 1.0)));
 }
 

@@ -1,4 +1,7 @@
+#extension GL_OES_standard_derivatives : require
 
+//#define TERRAIN_SPECULAR
+//#define GAMMA
 
 /* medea.js - Open Source, High-Performance 3D Engine based on WebGL.
  *
@@ -12,9 +15,8 @@
 #include <remote:mcore/shaders/core.psh>
 #include <remote:mcore/shaders/lighting.psh>
 
-uniform vec3 LIGHT_D0_DIR;
-
 uniform sampler2D coarse_normal_texture;
+uniform sampler2D fine_normal_texture;
 
 uniform sampler2D ground_texture;
 uniform sampler2D ground_normal_texture;
@@ -33,57 +35,110 @@ uniform vec4 terrain_uv_offset_scale;
 uniform float inv_terrain_map_dim;
 uniform float uv_scale;
 
-const float kDETAIL_NORMAL_STRENGTH = 0.4;
-const float kSPECULAR_STRENGTH = 0.2;
-const float kCOARSE_NORMAL_SCALE = 0.18;
+const float kDETAIL_NORMAL_STRENGTH = 2.0;
+const float kFINE_NORMAL_STRENGTH = 4.0;
+const float kCOARSE_NORMAL_STRENGTH = 6.0;
+
+const float kDETAIL_NORMAL_SCALE = 1.0;
+const float kFINE_NORMAL_SCALE = 0.025;
+const float kCOARSE_NORMAL_SCALE = 0.05;
+
+
+const float kSPECULAR_STRENGTH = 0.05;
+
 const float kALL_SNOW_HEIGHT = 0.60;
 const float kSNOW_BEGIN = 0.55;
+const float kROCK_BASE_BLEND_OFFSET = 0.5;
+
+const float kTILE_SIZE = 64.0;
+const float kTEXTURE_DISTANCE_SCALE = kTILE_SIZE * 15.0;
+const float kTEXTURE_SQ_DISTANCE_SCALE = kTEXTURE_DISTANCE_SCALE * kTEXTURE_DISTANCE_SCALE;
+const float kINV_TEXTURE_SQ_DISTANCE_SCALE = 1.0 / kTEXTURE_SQ_DISTANCE_SCALE;
+
+vec3 SwizzleColorToNormal(vec2 c, float yscale) {
+	return normalize(vec3(c.r, yscale, c.g) - vec3(0.5, 0.0, 0.5));
+}
+
+vec3 GetDetailNormal(vec2 uv, float distance_blend, float base_rock_blend) {
+	vec3 nor_base = mix(
+			texture2D(ground_normal_texture, uv).rgb,
+			texture2D(ground_normal_texture, uv * 0.5).rgb,
+			distance_blend
+	);
+	vec3 nor_rock = texture2D(stone_normal_texture, uv).rgb;
+	vec3 blend = mix(nor_base, nor_rock, base_rock_blend);
+	return SwizzleColorToNormal(blend.rg, kDETAIL_NORMAL_SCALE);
+}
+
+// Note: tangent and model space is 'approximately' the same for flat terrain tiles.
+//
+// For a single terrain, model space is world space plus a
+// translation. For a spherical terrain composed of 6 faces,
+// that get mapped onto an unit sphere, model to world space
+// is a non-linear, non-invertible map so the vertex shader
+// must forward a suitable tangent basis.
 
 void main()
 {
+	vec3 model_light_dir_0 = normalize(FetchVec3(model_light_dir_0));
 	vec2 uv = FetchTexCoord();
+	
+	// World-space eye vector
 	vec3 eye = FetchVec4(eye_height).xyz;
+
+	// Square of world-space eye distance
 	float eye_sq_distance = dot(eye, eye);
 
-	// Fetch normal, height and occlusion from RGBA normal map
-	vec4 nor_occ = texture2D(coarse_normal_texture,
-		inv_terrain_map_dim * (terrain_uv_offset_scale.xy + uv * terrain_uv_offset_scale.zw)
-	);
+	// Height of the current point in range [0, 1]
+	float height = FetchVec4(eye_height).w;
 
-	// The blue channel of the normal map contains a perlin noise
-	float noise = nor_occ.b;
-	nor_occ.b = 1.0;
+	// Position on the whole terrain in [0, 1] x [0, 1].
+	// This is the UV coordinate to sample from the terrain-sized
+	// texture maps (coarse and final normal input, noise, AO),
+	vec2 terrain_uv = inv_terrain_map_dim * (terrain_uv_offset_scale.xy +
+		uv * terrain_uv_offset_scale.zw);
 
+	//
+	float sq_distance_scaled = eye_sq_distance * kINV_TEXTURE_SQ_DISTANCE_SCALE;
+	float uv_resolution_blend = clamp(sq_distance_scaled, 0.0, 1.0);
+	float normal_scale_blend = 2.0 - uv_resolution_blend;
+
+	// Fetch coarse normals (rg), noise (b) and ambient occlusion
+	// (a) from the RGBA coarse normal map
+	//
+	// Coarse normals contain height-lines.
+	vec4 nor_noise_occ = texture2D(coarse_normal_texture, terrain_uv);
+	vec3 coarse_normal = SwizzleColorToNormal(nor_noise_occ.rg,
+		kCOARSE_NORMAL_SCALE * normal_scale_blend);
+
+	// Fetch fine terrain normals (rg) from the RGBA fine normal map
+	//
+	// Fine normals contain (relatively) unsmoothed height deltas
+	vec4 nor2_unused = texture2D(fine_normal_texture, terrain_uv);
+	vec3 fine_normal = SwizzleColorToNormal(nor2_unused.rg,
+		kFINE_NORMAL_SCALE * normal_scale_blend);
+
+	// Scale source UV to adapt for higher LODs
 	uv *= uv_scale;
 
-	// Take the normal from rg, skew the angle a bit
-	// Note: for an unrotated terrain tile, tangent and world space
-	// is the same, which greatly simplifies all tangent space
-	// calculations we do.
-	vec3 N = (nor_occ.rbg-0.5) * vec3(2.0, 2.0 * kCOARSE_NORMAL_SCALE, 2.0);
-	N = normalize(N);
+	// Mix in the detail normal, which is a mix between base and rock.
+	// Derive the blending between ground base and rock base from the
+	// angle of the coarse normal only.
+	float base_rock_blend = clamp(1.0 - coarse_normal.y * normal_scale_blend, 0.0, 1.0);
+	vec3 detail_normal = GetDetailNormal(uv, uv_resolution_blend, base_rock_blend);
 
-	// Derive the blending between ground base and rock base from the angle
-	float rock_base_blend = N.g + 0.2;
+	// Assemble the final normal from coarse, fine and detail normal
+	vec3 N = normalize(
+		coarse_normal 	* kCOARSE_NORMAL_STRENGTH 	+
+		fine_normal 	* kFINE_NORMAL_STRENGTH 	+
+		detail_normal 	* kDETAIL_NORMAL_STRENGTH
+	);
 
-	// Mix in the normal deltas from both maps.
-	// This now is an approximation to properly blending normals
-	// which is more than just an addition.
-	vec3 nor_base =
-	mix(
-			texture2D(ground_normal_texture, uv).rgb,
-			texture2D(ground_normal_texture, uv * 0.5).rgb,
-			clamp(eye_sq_distance / 400000.0, 0.0, 1.0));
-	vec3 nor_rock = texture2D(stone_normal_texture, uv).rgb;
-	N += (mix(nor_rock, nor_base, rock_base_blend) - 0.5).rbg * 2.0 *
-		kDETAIL_NORMAL_STRENGTH;
-	N = normalize(N);
-
-	// Diffuse contribution: simple lambert against sun direction
-	float diffuse = ComputeLambertDiffuseCoeff(LIGHT_D0_DIR, N);
+	// Diffuse lighting: simple lambert against sun direction
+	float diffuse = ComputeLambertDiffuseCoeff(model_light_dir_0, N);
 
 	// Apply ambient occlusion
-	diffuse = diffuse * nor_occ.a;
+	diffuse = diffuse * clamp(nor_noise_occ.a, 0.5, 1.0);
 
 #ifdef TERRAIN_SPECULAR
 	// Specular contribution: simple blinn with self-shadowing
@@ -91,19 +146,22 @@ void main()
 		eye,
 		N,
 		LIGHT_D0_DIR,
-		spec_color_shininess.a
+		32.0
 	) * kSPECULAR_STRENGTH;
 	specular *= clamp(diffuse * 4.0, 0.0, 1.0);
 #endif
 
-	// Get the diffuse base color by blending the color textures
+	// Get the diffuse base color by blending the color textures for rock and base
 	vec3 tex_base = texture2D(ground_texture, uv).rgb;
 	vec3 tex_rock = texture2D(stone_texture, uv).rgb;
+#ifdef GAMMA
 	tex_base *= tex_base; // Gamma
 	tex_rock *= tex_rock; // Gamma
-	vec3 tex = mix(tex_rock, tex_base, rock_base_blend);
+#endif
+	vec3 tex = mix(tex_base, tex_rock, base_rock_blend);
 
-	float height = FetchVec4(eye_height).w;
+	// Different code paths depending on whether this is a snow region
+	// or not.
 	if (height <= kSNOW_BEGIN) {
 		// Sampling distance grass with 0.5 the resolution looks
 		// as if the ground was populated by shrubs, which is
@@ -112,34 +170,38 @@ void main()
 		vec3 tex_green = mix(
 			texture2D(grass_texture, uv * 2.0).rgb,
 			texture2D(grass_texture, uv * 0.5).rgb,
-			clamp(eye_sq_distance / 400000.0, 0.0, 1.0));
+			uv_resolution_blend);
+#ifdef GAMMA
 		tex_green *= tex_green; // Gamma
+#endif
 
-		float d = max(0.0, 1.0 - rock_base_blend * rock_base_blend * noise);
-		tex = mix(tex_green, tex, d);
+		float d = clamp(1.0 - base_rock_blend * base_rock_blend - nor_noise_occ.b * nor_noise_occ.b, 0.0, 1.0);
+		tex = mix(tex, tex_green, d);
 	}
 	else {
 		vec3 tex_snow = texture2D(snow_texture, uv).rgb;
-		tex_snow *= tex_snow; // Gamma
+		//tex_snow *= tex_snow; // Gamma
 
 		float snow_transition = (kALL_SNOW_HEIGHT - height) / (kALL_SNOW_HEIGHT - kSNOW_BEGIN);
-		tex = mix(tex_snow, tex, clamp(snow_transition + rock_base_blend * 0.5, -0.5, 1.0));
+		tex = mix(tex_snow, tex, clamp(snow_transition + base_rock_blend, -1.0, 1.0));
 	}
-
 
 	// Simple fog
 	vec3 color = tex * diffuse
 #ifdef TERRAIN_SPECULAR
-	+ spec_color_shininess.rgb * specular;
+	+ vec3(1.0, 1.0, 1.0) * specular;
 #endif
 	;
 	vec3 fog_color = vec3(0.4,0.55,0.85);
-	float eye_height = eye.y / 600.0;
+	float eye_height = length(eye) / 600.0;
 	eye.y = 0.0;
 	float distance = (eye_sq_distance - 500000.0) / (2000000.0 * max(1.0, eye_height));
 
 	// Assemble, Fog, Gamma
     gl_FragColor.a = 1.0;
-	gl_FragColor.rgb = sqrt(mix(color, fog_color, clamp(distance, 0.0, 1.0)));
+	gl_FragColor.rgb = mix(color * 0.7, fog_color, 0.001 * clamp(distance, 0.0, 1.0));
+#ifdef GAMMA
+	gl_FragColor.rgb = sqrt(gl_FragColor.rgb);
+#endif
 }
 

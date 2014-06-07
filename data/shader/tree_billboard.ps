@@ -1,0 +1,40 @@
+
+
+/* medea.js - Open Source, High-Performance 3D Engine based on WebGL.
+ *
+ * (c) 2011-2013, Alexander C. Gessler
+ *  https://github.com/acgessler/medea.js
+ *
+ * Made available under the terms and conditions of a 3-clause BSD license.
+ *
+ */
+
+#include <remote:mcore/shaders/core.psh>
+#include <remote:mcore/shaders/lighting.psh>
+
+uniform sampler2D texture;
+uniform vec3 LIGHT_D0_DIR;
+
+void main()
+{
+  vec4 color = texture2D(texture, FetchTexCoord());
+  gl_FragColor.a = color.a;
+  if (color.a < 0.6) {
+  	discard;
+  }
+
+  vec3 nor = normalize(FetchVec3(normal));
+  float diffuse = ComputeLambertDiffuseCoeff(LIGHT_D0_DIR, nor);
+
+  vec3 eye = FetchVec3(eye);
+  eye.y = 0.0;
+  float distance = (dot(eye, eye) - 500000.0) / (2000000.0);
+
+  vec3 fog_color = vec3(0.4,0.55,0.85);
+
+  // Chrome pads transparent pixel with white, thus loosing
+  // the original black which is relevant for sampling
+  // though.
+  gl_FragColor.rgb =  diffuse * mix(color.rgb, fog_color, 0.0001 * clamp(distance,0.0, 1.0));
+}
+

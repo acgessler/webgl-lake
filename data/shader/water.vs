@@ -9,16 +9,26 @@
  */
  
 #include <remote:mcore/shaders/core.vsh>
+#include <url:/data/shader/terrain_shared.vsh>
+#include <url:/data/shader/sphere_shared.vsh>
 
 uniform vec3 CAM_POS;
+const float kINV_TILE_SIZE = 1.0 / 64.0;
+const float kWATER_LEVEL = 31.0;
 
-// currently all lighting computation happens in worldspace
+// Currently all lighting computation happens in worldspace
 void main()
 {
-	PassClipPosition(ModelToClipSpace(FetchPosition()));
-	PassNormal(ModelNormalToWorldSpace(FetchNormal()));
-	PassTexCoord(FetchTexCoord());
+	vec3 position = FetchPosition();
+	position.y = kWATER_LEVEL;
+	vec2 uv = position.xz * kINV_TILE_SIZE;
+	uv = inv_terrain_map_dim * (terrain_uv_offset_scale.xy + uv * terrain_uv_offset_scale.zw);
 
-	PassVec3(eye, CAM_POS - ModelToWorldSpace(FetchPosition()));
+	vec3 sphere_world_position = ProjectOntoSphere(position);
+	PassClipPosition(WorldToClipSpace(sphere_world_position));
+	PassNormal(normalize(sphere_world_position));
+	PassTexCoord(uv);
+
+	PassVec3(eye, CAM_POS - sphere_world_position);
 }
 
