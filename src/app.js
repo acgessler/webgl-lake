@@ -376,6 +376,9 @@ function on_init_context(terrain_image, tree_image) {
 		// AABB in local space
 		local_bb : null,
 
+		// For each corner, a world-space normal to determine visibility
+		corner_normals : null,
+
 		init : function(x, y, w, is_back) {
 			this._super();
 			this.x = x | 0;
@@ -386,7 +389,7 @@ function on_init_context(terrain_image, tree_image) {
 			this.is_back = is_back;
 
 			if (this.w === 32) {
-				this.AddEntity(tree_mesh);
+				//this.AddEntity(tree_mesh);
 				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h));
 			}
 
@@ -404,6 +407,9 @@ function on_init_context(terrain_image, tree_image) {
 			this._CalculateStaticBB();
 		},
 
+		// Populates the node's BB with a static AABB that reflects the sphere shape.
+		//
+		// Also populates this.corner_normals with normals for each of the corners.
 		_CalculateStaticBB : function() {
 			// Take the correct y bounding segment from the lookup table we generated
 			// This gives a basic bounding box.
@@ -424,6 +430,7 @@ function on_init_context(terrain_image, tree_image) {
 			// Note that static BBs are still multiplied with
 			// the node's world transformation, i.e. the orientation
 			// terrain plane need not to be taken into account.
+			//
 			var scratch = vec3.create();
 			var vmin = vec3.create();
 			vmin[0] = 1e10;
@@ -433,6 +440,10 @@ function on_init_context(terrain_image, tree_image) {
 			vmax[0] = -1e10;
 			vmax[1] = -1e10;
 			vmax[2] = -1e10;
+			this.corner_normals = new Array(4);
+			for (var i = 0; i < 4; ++i) {
+				this.corner_normals[i] = vec3.create();
+			}
 			for (var i = 0; i < 8; ++i) {
 				scratch[0] = ((i & 0x1) ? b : a)[0] + TERRAIN_PLANE_OFFSET;
 				scratch[1] = RADIUS;
@@ -445,7 +456,9 @@ function on_init_context(terrain_image, tree_image) {
 				scratch[1] *= height;
 				scratch[2] *= height;
 
-				scratch[1] -= RADIUS;
+				if (i < 4) {
+					vec3.normalize(scratch, this.corner_normals[i]);
+				}
 
 				for (var j = 0; j < 3; ++j) {
 					vmin[j] = Math.min(vmin[j], scratch[j]);
@@ -454,24 +467,48 @@ function on_init_context(terrain_image, tree_image) {
 			}
 
 			vmin[0] -= TERRAIN_PLANE_OFFSET;
+			vmin[1] -= RADIUS;
 			vmin[2] -= TERRAIN_PLANE_OFFSET;
 			vmax[0] -= TERRAIN_PLANE_OFFSET;
+			vmax[1] -= RADIUS;
 			vmax[2] -= TERRAIN_PLANE_OFFSET;
 			this.SetStaticBB(medea.CreateBB(vmin, vmax));
 		},
 
-		cnt : 0,
-
 		// This is a Render() operation (not Update) since the terrain
 		// rendering depends on the camera/viewport.
+		//
+		// Determines whether to further sub-divide or not and dynamically
+		// updates the scene sub-graph under this node.
 		Render : function(camera, rqmanager) {
 			var cam_pos = camera.GetWorldPos();
 		
 			var vmin = this.bb[0];
 			var vmax = this.bb[1];
 
-			// Determine whether to further sub-divide or not
 			var can_subdivide = this.w != 1;
+
+			// Quickly exclude tiles that are on the back side of the sphere.
+			// This case is not caught by the regular culling (since it
+			// doesn't know about the sphere topology hiding half of the
+			// surface at a time).
+			var visibility_status = this._DetermineVisibilityStatus(cam_pos);
+			if (visibility_status === medea.VISIBLE_NONE) {
+				this._SetChildrenEnabled(false);
+				return;
+			}
+
+			this._SetChildrenEnabled(true);
+
+			// If the node is partially hidden, subdivide down until a
+			// threshold LOD is reached (this is a tradeoff between
+			// overdraw and an increased batch count).
+			var PVS_THRESHOLD_LOD = 5;
+			if (can_subdivide && visibility_status == medea.VISIBLE_PARTIAL &&
+				this.node_lod_level >= PVS_THRESHOLD_LOD) {
+				this._Subdivide();
+				return;
+			}
 			
 			// We always sub-divide if the player is in the node
 			if (can_subdivide && 
@@ -517,6 +554,31 @@ function on_init_context(terrain_image, tree_image) {
 				this._RenderAsSingleTile(clod_min,
 					(this.local_bb[0][1] + this.local_bb[1][1]) * 0.5);
 			}
+		},
+
+		_DetermineVisibilityStatus : function(cam_pos) {
+			var norm = vec3.normalize(vec3.create(cam_pos));
+			var world = this.GetGlobalTransform();
+
+			var count_negative = 0;
+			var scratch_src = new Array(4);
+			for (var i = 0; i < 4; ++i) {
+				vec3.set(this.corner_normals[i], scratch_src);
+				scratch_src[3] = 0;
+				var cn = vec3.normalize(mat4.multiplyVec4(world, scratch_src, scratch_src));
+				var d = vec3.dot(cn, norm);
+				if (d < 0) {
+					++count_negative;
+				}
+			}
+
+			if (count_negative === 0) {
+				return medea.VISIBLE_ALL;
+			}
+			else if(count_negative === 4) {
+				return medea.VISIBLE_NONE;
+			}
+			return medea.VISIBLE_PARTIAL;
 		},
 
 		_Subdivide : function() {
@@ -568,14 +630,9 @@ function on_init_context(terrain_image, tree_image) {
 			}
 		},
 
-		_NotVisible : function() {
-			if (this.draw_tile !== null) {
-				this.draw_tile.Enabled(false);
-			}
-			if (this.sub_quads !== null) {
-				for (var i = 0; i < 4; ++i) {
-					this.sub_quads[i].Enabled(false);
-				}
+		_SetChildrenEnabled : function(enabled) {
+			for (var i = 0; i < this.children.length; ++i) {
+				this.children[i].Enabled(enabled);
 			}
 		},
 	});
@@ -693,7 +750,7 @@ function on_init_context(terrain_image, tree_image) {
 
 	console.log("Context created, setting up scene");
 	viewport = medea.CreateViewport();
-	viewport.ClearColor([1.0,0.0,1.0]);
+	viewport.ClearColor([0.0,0.0,0.0]);
 	
 	root = medea.RootNode();
 	var light = medea.CreateNode();
@@ -743,10 +800,10 @@ function on_init_context(terrain_image, tree_image) {
 
 
 	// Add the skydome, as in the previous sample
-	medea.LoadModules('skydome',function() {
-		var dome_node = medea.CreateSkydomeNode('remote:skydome_sample/midmorning/midmorning.png', 0.4);
-		root.AddChild(dome_node);
-    });
+	//medea.LoadModules('skydome',function() {
+	//	var dome_node = medea.CreateSkydomeNode('remote:skydome_sample/midmorning/midmorning.png', 0.4);
+	//	root.AddChild(dome_node);
+    //});
 
 	
 	// And a plain camera controller
@@ -761,6 +818,8 @@ function on_init_context(terrain_image, tree_image) {
 		cc.CameraDistance(RADIUS * 2);
 		cc.MaximumCameraDistance(RADIUS * 5);
 		cc.MinimumCameraDistance(RADIUS);
+		cc.Smoothing(true);
+		cc.SmoothSpeed(0.7);
 		//cc.WalkSpeed(25);
         cam.AddEntity(cc);
 		cc.Enable();
