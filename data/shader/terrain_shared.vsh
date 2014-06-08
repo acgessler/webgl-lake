@@ -1,6 +1,8 @@
 #ifndef INCLUDED_TERRAIN_SHARED
 #define INCLUDED_TERRAIN_SHARED
 
+#include <url:/data/shader/constants_shared.vsh>
+
 uniform sampler2D heightmap;
 
 uniform vec4 terrain_uv_offset_scale;
@@ -12,9 +14,18 @@ uniform float lod_attenuation;
 const float kMIN_LOD = 0.0;
 const float kMAX_LOD = 8.0;
 
+const float kLOD_BASE_UNIT = 16.0;
+const float kSQ_LOD_BASE_UNIT = kLOD_BASE_UNIT * kLOD_BASE_UNIT;
 
-float CalcLOD(highp vec3 world_eye) {
-	highp float lod = log(dot(world_eye, world_eye) * 2.0 / (16.0 * 16.0)) * lod_attenuation * 0.5 / log(2.0);
+vec2 TilePositionToTerrainUVCoordinates(vec2 tile_pos_xz) {
+	tile_pos_xz *= kINV_TILE_SIZE;
+	return inv_terrain_map_dim * (terrain_uv_offset_scale.xy +
+		tile_pos_xz * terrain_uv_offset_scale.zw
+	);
+}
+
+float CalcLOD(highp float sq_distance) {
+	highp float lod = log2(sq_distance * 3.0 / kSQ_LOD_BASE_UNIT) * lod_attenuation * 0.5;
 	return clamp(lod, kMIN_LOD, kMAX_LOD);
 }
 
@@ -41,11 +52,11 @@ float SampleLOD(vec2 base, float lod_shift_amount) {
 	return mix(samples_mixed.x, samples_mixed.y, sample_pos.y);
 }
 
-float ComputeHeightAt(vec3 position, vec3 world_eye, vec2 uv) {
+float ComputeHeightAt(vec3 position, float sq_distance, vec2 uv) {
 	// First reproduce the LOD calculation that also happened
 	// when assigning coarse LODs to terrain tiles. For the
 	// CLODing to work, they must match.
-	float clod = CalcLOD(world_eye);
+	float clod = CalcLOD(sq_distance);
 	vec2 base = terrain_uv_offset_scale.xy + uv * terrain_uv_offset_scale.zw;
 
 	// Sample the lower and the upper LOD and blend them
@@ -53,7 +64,7 @@ float ComputeHeightAt(vec3 position, vec3 world_eye, vec2 uv) {
 	// large part of this can be further vectorized.
 	float lower_lod_height = SampleLOD(base, lod_range.z);
 	float upper_lod_height = SampleLOD(base, lod_range.w);
-	return mix(lower_lod_height, upper_lod_height, clod - lod_range.x);
+	return mix(lower_lod_height, upper_lod_height, clamp(clod - lod_range.x, 0.0, 1.0) );
 }
 
 #endif 

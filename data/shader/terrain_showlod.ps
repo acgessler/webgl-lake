@@ -11,12 +11,18 @@
 
 #include <remote:mcore/shaders/core.psh>
 
-const float kMAX_LOD = 4.0;
 
 void main()
 {
 	vec2 lod = FetchVec2(lod);
     gl_FragColor.a = 1.0;
+    if (lod.y < 0.0) {
+
+    // Debug: this is wrong. Tile rendered with lower base LOD
+    // than its LOD should be based off camera distance
+    	gl_FragColor.rgb = vec3(0.0, 1.0, 0.0);
+    	return;
+    }
 	gl_FragColor.rgb = vec3(lod.y, 0, lod.x);
 }
 

@@ -15,6 +15,8 @@
 #include <remote:mcore/shaders/core.psh>
 #include <remote:mcore/shaders/lighting.psh>
 
+#include <url:data/shader/constants_shared.vsh>
+
 uniform sampler2D coarse_normal_texture;
 uniform sampler2D fine_normal_texture;
 
@@ -40,17 +42,11 @@ const float kFINE_NORMAL_STRENGTH = 4.0;
 const float kCOARSE_NORMAL_STRENGTH = 6.0;
 
 const float kDETAIL_NORMAL_SCALE = 1.0;
-const float kFINE_NORMAL_SCALE = 0.025;
+const float kFINE_NORMAL_SCALE = 0.035;
 const float kCOARSE_NORMAL_SCALE = 0.05;
-
 
 const float kSPECULAR_STRENGTH = 0.05;
 
-const float kALL_SNOW_HEIGHT = 0.60;
-const float kSNOW_BEGIN = 0.55;
-const float kROCK_BASE_BLEND_OFFSET = 0.5;
-
-const float kTILE_SIZE = 64.0;
 const float kTEXTURE_DISTANCE_SCALE = kTILE_SIZE * 15.0;
 const float kTEXTURE_SQ_DISTANCE_SCALE = kTEXTURE_DISTANCE_SCALE * kTEXTURE_DISTANCE_SCALE;
 const float kINV_TEXTURE_SQ_DISTANCE_SCALE = 1.0 / kTEXTURE_SQ_DISTANCE_SCALE;
@@ -169,14 +165,14 @@ void main()
 		// patterns of green.
 		vec3 tex_green = mix(
 			texture2D(grass_texture, uv * 2.0).rgb,
-			texture2D(grass_texture, uv * 0.5).rgb,
+			texture2D(grass_texture, uv).rgb,
 			uv_resolution_blend);
 #ifdef GAMMA
 		tex_green *= tex_green; // Gamma
 #endif
 
-		float d = clamp(1.0 - base_rock_blend * base_rock_blend - nor_noise_occ.b * nor_noise_occ.b, 0.0, 1.0);
-		tex = mix(tex, tex_green, d);
+		float d = clamp(base_rock_blend * base_rock_blend + nor_noise_occ.b * nor_noise_occ.b, 0.0, 1.0);
+		tex = mix(tex_green, tex, d);
 	}
 	else {
 		vec3 tex_snow = texture2D(snow_texture, uv).rgb;

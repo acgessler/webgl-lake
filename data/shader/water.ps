@@ -16,8 +16,7 @@ uniform vec4 spec_color_shininess;
 
 #include <remote:mcore/shaders/core.psh>
 #include <remote:mcore/shaders/lighting.psh>
-
-const float kHEIGHT_WATER_LEVEL = (31.0 / 0.7) / 255.0;
+#include <url:/data/shader/constants_shared.vsh>
 
 // currently all lighting computation happens in worldspace
 void main()
@@ -51,6 +50,6 @@ void main()
 
 	// Assemble, Fog, Gamma
     gl_FragColor.a = 0.65;
-	gl_FragColor.rgb = 0.65 * sqrt(mix(color, fog_color, clamp(distance, 0.0, 1.0)));
+	gl_FragColor.rgb = 0.65 * sqrt(mix(color, fog_color, clamp(distance, 0.0, 1.0) * 0.001));
 }
 

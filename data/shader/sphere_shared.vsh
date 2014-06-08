@@ -2,8 +2,7 @@
 #define INCLUDED_SPHERE_SHARED
 
 #include <remote:mcore/shaders/core.vsh>
-
-const float kRADIUS = 1024.0;
+#include <url:data/shader/constants_shared.vsh>
 
 // Project from model space to spherically transformed world space
 vec3 ProjectOntoSphere(vec3 position) {

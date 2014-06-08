@@ -12,25 +12,37 @@
 #include <url:/data/shader/terrain_shared.vsh>
 
 uniform vec3 CAM_POS;
-const float kINV_TILE_SIZE = 1.0 / 64.0;
 
+uniform float sq_base_height;
+
+const float kINV_TILE_SIZE = 1.0 / 64.0;
+const float kRADIUS = 1024.0;
+const float kTERRAIN_HEIGHT_SCALE = 0.65;
 
 void main()
 {
 	vec3 position = FetchPosition();
 	vec2 uv = position.xz * kINV_TILE_SIZE;
 
-	position.y = 0.0;
+	// First map to world space as usual, this part is linear
 	vec3 world_position = ModelToWorldSpace(position);
-	vec3 world_eye = CAM_POS - world_position;
 
-	float height = ComputeHeightAt(position, vec3(world_eye.x, 0, world_eye.z), uv);
-	position.y = height * 255.0;
+	// Input world_position is on the surface of the unit cube,
+	// therefore normalizing yields a non-linear map to unit sphere.
+	vec3 unit_sphere_pos = normalize(world_position);
+	vec3 sphere_world_position = unit_sphere_pos * kRADIUS;
+	vec3 shift = sphere_world_position - world_position;
+	vec3 world_eye = CAM_POS - sphere_world_position;
+
+	float height = ComputeHeightAt(position, dot(world_eye, world_eye) - sq_base_height, uv);
+	position.y = height * 255.0 * kTERRAIN_HEIGHT_SCALE;
+	vec3 sphere_world_position_with_height = sphere_world_position +
+		unit_sphere_pos * position.y;
 
 	// Forward final position and computed UV to PS
-	PassClipPosition(ModelToClipSpace(position));
+	PassClipPosition(WorldToClipSpace(sphere_world_position_with_height));
 
-	float lod = CalcLOD(vec3(world_eye.x, 0, world_eye.z));
-	PassVec2(lod, vec2(lod_range.y - lod, lod - lod_range.x));
+	float lod = CalcLOD(dot(world_eye, world_eye) - sq_base_height);
+	PassVec2(lod, vec2(floor(lod) / 8.0, lod - lod_range.x));
 }
 

@@ -6,6 +6,10 @@ var root = null;
 
 var lod_attenuation = 0.5;
 
+// The following parameters need to be synced with constants_shared.vsh
+// Technically most of them could be made uniforms and passed to
+// shaders at runtime, but it significantly decreases shader
+// performance and comes at higher CPU overhead.
 var COUNT_LOD_LEVELS = 9;
 var TILE_SIZE = 64;
 var TERRAIN_PLANE_WIDTH = 2048;
@@ -17,7 +21,7 @@ var TREE_MAP_WIDTH = 512; // terrain % trees == 0
 var TREE_WIDTH = 2.6;
 var TREE_ASPECT = 2.3;
 
-var TERRAIN_HEIGHT_SCALE = 1.0;
+var TERRAIN_HEIGHT_SCALE = 0.55;
 
 function on_init_error() {
 	console.log("Failed to initialize");
@@ -37,7 +41,7 @@ function log2(x) {
 //
 // Must keep in sync with terrain.vs
 function calc_clod(sq_distance) {
-	var log_distance = log2(sq_distance * 2.0 / (16.0 * 16.0)) * 0.5 * lod_attenuation;
+	var log_distance = log2(sq_distance * 3.0 / (16.0 * 16.0)) * 0.5 * lod_attenuation;
 	return Math.max(0, Math.min(COUNT_LOD_LEVELS - 1,
 		log_distance));
 }
@@ -195,8 +199,7 @@ function compute_tree_mesh(terrain_image, tree_image) {
 	};
 
 	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/tree_billboard', {
-		texture : medea.CreateTexture('url:/data/textures/pine_billboard.png', null,
-			medea.TEXTURE_PREMULTIPLIED_ALPHA),
+		texture : medea.CreateTexture('url:/data/textures/pine_billboard.png', null),
 		scaling : TREE_WIDTH
 	});
 	var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
@@ -302,12 +305,13 @@ var get_prototype_terrain_material = medealib.Cached(function() {
 		// constant directly maps to medea.CreateTexture on that URL)
 		heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
 			// We don't need MIPs for the heightmap anyway
-			medea.TEXTURE_FLAG_NO_MIPS | 
-			// Also, only one channel is required
-			medea.TEXTURE_FORMAT_LUM |
+			medea.TEXTURE_FLAG_NO_MIPS |
 			// Hint to medea that the texture will be accessed
 			// from within a vertex shader.
-			medea.TEXTURE_VERTEX_SHADER_ACCESS),
+			medea.TEXTURE_VERTEX_SHADER_ACCESS,
+
+			// Only one channel is required
+			medea.TEXTURE_FORMAT_LUM),
 	};	
 	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
 	mat.SetIgnoreUniformVarLocationNotFound();
@@ -321,7 +325,7 @@ var get_prototype_water_material = medealib.Cached(function() {
 	var water_material = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/water', {
 			texture : 'url:/data/textures/water.jpg',
 			// Allocate the heightmap again, this time with MIPs as we'll otherwise suffer from aliasing
-			heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
+			heightmap : medea.CreateTexture('url:data/textures/heightmap0a.png', null, null,
 					// Only one channel is required
 					medea.TEXTURE_FORMAT_LUM),
 			spec_color_shininess : [0.95, 0.95, 1.0, 32.0],
@@ -369,6 +373,9 @@ function on_init_context(terrain_image, tree_image) {
 		// rendered with reversed culling.
 		is_back : false,
 
+		// AABB in local space
+		local_bb : null,
+
 		init : function(x, y, w, is_back) {
 			this._super();
 			this.x = x | 0;
@@ -409,6 +416,8 @@ function on_init_context(terrain_image, tree_image) {
 			var b = vec3.create([(this.x + this.w) *  TILE_SIZE,
 				 height_min_max[1] * TERRAIN_HEIGHT_SCALE,
 				 (this.y + this.h) *  TILE_SIZE]);
+
+			this.local_bb = medea.CreateBB(a, b);
 			
 			// Now transform this AABB by the sphere shape
 			//
@@ -424,46 +433,50 @@ function on_init_context(terrain_image, tree_image) {
 			vmax[0] = -1e10;
 			vmax[1] = -1e10;
 			vmax[2] = -1e10;
-			for (var z = 0; z < 2; ++z) {
-				for (var y = 0; y < 2; ++y) {
-					for (var x = 0; x < 2; ++x) {
-						scratch[0] = (x ? b : a)[0] + TERRAIN_PLANE_OFFSET;
-						scratch[1] = 0;
-						scratch[2] = (z ? b : a)[2] + TERRAIN_PLANE_OFFSET;
+			for (var i = 0; i < 8; ++i) {
+				scratch[0] = ((i & 0x1) ? b : a)[0] + TERRAIN_PLANE_OFFSET;
+				scratch[1] = RADIUS;
+				scratch[2] = ((i & 0x2) ? b : a)[2] + TERRAIN_PLANE_OFFSET;
 
-						vec3.normalize(scratch);
+				vec3.normalize(scratch);
 
-						var height = (y ? b : a)[1] + RADIUS;
-						scratch[0] *= height;
-						scratch[1] *= height;
-						scratch[2] *= height;
+				var height = ((i & 0x4) ? b : a)[1] + RADIUS;
+				scratch[0] *= height;
+				scratch[1] *= height;
+				scratch[2] *= height;
 
-						for (var i = 0; i < 3; ++i) {
-							vmin[i] = Math.min(vmin[i], scratch[i]);
-							vmax[i] = Math.max(vmax[i], scratch[i]);
-						}
-					}
+				scratch[1] -= RADIUS;
+
+				for (var j = 0; j < 3; ++j) {
+					vmin[j] = Math.min(vmin[j], scratch[j]);
+					vmax[j] = Math.max(vmax[j], scratch[j]);
 				}
 			}
 
+			vmin[0] -= TERRAIN_PLANE_OFFSET;
+			vmin[2] -= TERRAIN_PLANE_OFFSET;
+			vmax[0] -= TERRAIN_PLANE_OFFSET;
+			vmax[2] -= TERRAIN_PLANE_OFFSET;
 			this.SetStaticBB(medea.CreateBB(vmin, vmax));
 		},
+
+		cnt : 0,
 
 		// This is a Render() operation (not Update) since the terrain
 		// rendering depends on the camera/viewport.
 		Render : function(camera, rqmanager) {
 			var cam_pos = camera.GetWorldPos();
+		
+			var vmin = this.bb[0];
+			var vmax = this.bb[1];
 
 			// Determine whether to further sub-divide or not
-			var bb = this.GetWorldBB();
-
-			var vmin = bb[0];
-			var vmax = bb[1];
-			var can_subdivide = this.w != 1 && this.h != 1;
+			var can_subdivide = this.w != 1;
 			
 			// We always sub-divide if the player is in the node
 			if (can_subdivide && 
 				cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
+				cam_pos[1] >= vmin[1] && cam_pos[1] < vmax[1] &&
 				cam_pos[2] >= vmin[2] && cam_pos[2] < vmax[2]) {
 				this._Subdivide();
 				return;
@@ -477,26 +490,15 @@ function on_init_context(terrain_image, tree_image) {
 				return;
 			}
 
-			// TODO: instead of assuming y==0 (what the shader
-			// currently does, assume the center of the BB)
-
-			// For the purpose of LOD calculation, the camera position
-			// is always rounded to be at the center of the current
-			// tile.
-			cam_pos[0] = (Math.floor(cam_pos[0] / TILE_SIZE) + 0.5) * TILE_SIZE;
-			cam_pos[1] = 0.0;
-			cam_pos[2] = (Math.floor(cam_pos[2] / TILE_SIZE) + 0.5) * TILE_SIZE;
-			var corners = [
-				[vmin[0], 0, vmin[2]],
-				[vmin[0], 0, vmax[2]],
-				[vmax[0], 0, vmin[2]],
-				[vmax[0], 0, vmax[2]],
-			];
-
 			var clod_min, clod_max;
 			var scratch_vec = vec3.create();
-			for (var i = 0; i < 4; ++i) {
-				var delta = vec3.subtract(cam_pos, corners[i], scratch_vec);
+			for (var i = 0; i < 8; ++i) {
+				var corner = [
+					i & 1 ? vmin[0] : vmax[0],
+					i & 2 ? vmin[1] : vmax[1],
+					i & 4 ? vmin[2] : vmax[2],
+				];
+				var delta = vec3.subtract(cam_pos, corner, scratch_vec);
 				var clod = calc_clod(vec3.dot(delta, delta));
 				if (i === 0 || clod < clod_min) {
 					clod_min = clod;
@@ -505,16 +507,15 @@ function on_init_context(terrain_image, tree_image) {
 					clod_max = clod;
 				}
 			}
-			//clod_min = Math.floor(clod_min);
-			//clod_max = Math.ceil(clod_max);
+	
 			var clod_delta = clod_max - clod_min;
-
-			var can_satisfy_lod = clod_min - Math.floor(Math.log(this.w) / Math.log(2)) >= 0;
+			var can_satisfy_lod = clod_min - Math.floor(log2(this.w)) >= 0;
 			if ((clod_delta >= 1.0 || !can_satisfy_lod) && can_subdivide) {
 				this._Subdivide();
 			}
 			else {
-				this._RenderAsSingleTile(clod_min, cam_pos);
+				this._RenderAsSingleTile(clod_min,
+					(this.local_bb[0][1] + this.local_bb[1][1]) * 0.5);
 			}
 		},
 
@@ -547,9 +548,9 @@ function on_init_context(terrain_image, tree_image) {
 			}
 		},
 
-		_RenderAsSingleTile : function(clod_min) {
+		_RenderAsSingleTile : function(clod_min, tile_y_mean) {
 			if (this.draw_tile === null) {
-				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back);
+				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back, tile_y_mean);
 				this.AddChild(this.draw_tile);
 			}
 
@@ -564,6 +565,17 @@ function on_init_context(terrain_image, tree_image) {
 			}
 			for (var i = 0; i < 4; ++i) {
 				sub_quads[i].Enabled(false);
+			}
+		},
+
+		_NotVisible : function() {
+			if (this.draw_tile !== null) {
+				this.draw_tile.Enabled(false);
+			}
+			if (this.sub_quads !== null) {
+				for (var i = 0; i < 4; ++i) {
+					this.sub_quads[i].Enabled(false);
+				}
 			}
 		},
 	});
@@ -625,7 +637,7 @@ function on_init_context(terrain_image, tree_image) {
 
 		is_back : false,
 
-		init : function(x, y, w, h, is_back) {
+		init : function(x, y, w, h, is_back, tile_y_mean) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
@@ -661,6 +673,7 @@ function on_init_context(terrain_image, tree_image) {
 
 			material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
 			material.Pass(0).Set("uv_scale", this.w);
+			material.Pass(0).Set("sq_base_height", tile_y_mean * tile_y_mean);
 			material.Pass(0).CullFaceMode(is_back ? "back" : "front");
 			material.Pass(0).CullFace(false);
 
@@ -712,7 +725,7 @@ function on_init_context(terrain_image, tree_image) {
 		[0, 0, 1],
 	];
 
-	for (var i = 1; i < 2; ++i) {
+	for (var i = 0; i < 6; ++i) {
 		var is_back = i >= 3;
 		var plane = new TerrainQuadTreeNode(0, 0, 32, is_back);
 		plane.Translate([TERRAIN_PLANE_OFFSET, 0, TERRAIN_PLANE_OFFSET]);
@@ -744,8 +757,11 @@ function on_init_context(terrain_image, tree_image) {
 		//cam.Culling(false);
 		
 		cam.Translate(vec3.create([1900,1900,1900]));
-		var cc = medea.CreateCamController('fps');
-		cc.WalkSpeed(25);
+		var cc = medea.CreateCamController('orbit');
+		cc.CameraDistance(RADIUS * 2);
+		cc.MaximumCameraDistance(RADIUS * 5);
+		cc.MinimumCameraDistance(RADIUS);
+		//cc.WalkSpeed(25);
         cam.AddEntity(cc);
 		cc.Enable();
 	});
