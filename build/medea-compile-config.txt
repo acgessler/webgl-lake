@@ -16,6 +16,7 @@ sceneloader_assimp2json
 forwardrenderer
 light
 input
+renderer
 
 [resources]
 remote:mcore/shaders/core.psh=data/mcore/shaders/core.psh

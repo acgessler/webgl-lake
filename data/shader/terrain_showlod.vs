@@ -10,14 +10,10 @@
  
 #include <remote:mcore/shaders/core.vsh>
 #include <url:/data/shader/terrain_shared.vsh>
+#include <url:/data/shader/constants_shared.vsh>
 
 uniform vec3 CAM_POS;
-
 uniform float sq_base_height;
-
-const float kINV_TILE_SIZE = 1.0 / 64.0;
-const float kRADIUS = 1024.0;
-const float kTERRAIN_HEIGHT_SCALE = 0.65;
 
 void main()
 {
