@@ -9,6 +9,8 @@ var TILE_SIZE = 64;
 var TERRAIN_PLANE_WIDTH = 2048;
 var TERRAIN_PLANE_OFFSET = -TERRAIN_PLANE_WIDTH / 2;
 var RADIUS = 1024;
+var RADIUS_GROUND = RADIUS + 60;
+var OUTER_RADIUS = RADIUS_GROUND * 1.05;
 var TREE_MAP_WIDTH = 512; // terrain % trees == 0
 
 // Tree billboard height over width

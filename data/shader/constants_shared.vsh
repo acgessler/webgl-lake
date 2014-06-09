@@ -7,7 +7,7 @@ const float kINV_TILE_SIZE = 1.0 / kTILE_SIZE;
 const float kRADIUS = 1024.0;
 const float kTERRAIN_HEIGHT_SCALE = 0.55;
 
-const float kWATER_LEVEL = 31.0;
+const float kWATER_LEVEL = 31.04;
 const float kHEIGHT_WATER_LEVEL = (kWATER_LEVEL / kTERRAIN_HEIGHT_SCALE) / 255.0;
 
 const float kALL_SNOW_HEIGHT = 0.60;

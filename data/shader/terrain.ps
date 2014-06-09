@@ -195,7 +195,7 @@ void main()
 
 	// Assemble, Fog, Gamma
     gl_FragColor.a = 1.0;
-	gl_FragColor.rgb = mix(color * 0.7, fog_color, 0.001 * clamp(distance, 0.0, 1.0));
+	gl_FragColor.rgb = mix(color, fog_color, 0.001 * clamp(distance, 0.0, 1.0));
 #ifdef GAMMA
 	gl_FragColor.rgb = sqrt(gl_FragColor.rgb);
 #endif

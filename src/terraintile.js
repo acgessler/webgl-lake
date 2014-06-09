@@ -59,7 +59,7 @@ var InitTerrainTileType = function(medea) {
 			this.Scale([this.w, TERRAIN_HEIGHT_SCALE, this.h]);
 			this.AddEntity(mesh);
 
-			// No further culling
+			// No further culling in the leafs.
 			this.SetStaticBB(medea.BB_INFINITE);
 		},
 

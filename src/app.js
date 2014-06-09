@@ -150,8 +150,10 @@ function on_init_context(terrain_image, tree_image) {
 
 	
 	// And a plain camera controller
+	var cam = medea.CreateCameraNode();
+	cam.ZNear(1);
+	cam.ZFar(10000);
 	medea.LoadModules('camcontroller',function() {
-		var cam = medea.CreateCameraNode();
 		root.AddChild(cam);
 		viewport.Camera(cam);
 		//cam.Culling(false);
@@ -183,6 +185,8 @@ function on_init_context(terrain_image, tree_image) {
 		return true;
 	});	
 
+	root.AddChild(new AtmosphereNode(cam));
+
 	medea.SetDebugPanel(null, function() {
 		var f1 = medea.debug_panel.gui.addFolder('Terrain');
 		f1.add(this, 'lod_attenuation');
@@ -193,7 +197,7 @@ function on_init_context(terrain_image, tree_image) {
 }
 
 function run() {
-	var deps = ['input', 'material', 'standardmesh', 'forwardrenderer', 'light', 'debug', 'terraintile', 'sceneloader', 'input_handler', 'keycodes'];
+	var deps = ['input', 'material', 'standardmesh', 'forwardrenderer', 'light', 'debug', 'terraintile', 'sceneloader', 'input_handler', 'keycodes', 'skydome'];
 	medealib.CreateContext('game_container', {dataroot: '../medea/data'}, deps, function(_medea) {
 		
 		// We only create one medea instance so make it global

@@ -1,0 +1,35 @@
+
+/* medea.js - Open Source, High-Performance 3D Engine based on WebGL.
+ *
+ * (c) 2011-2013, Alexander C. Gessler
+ *  https://github.com/acgessler/medea.js
+ *
+ * Made available under the terms and conditions of a 3-clause BSD license.
+ *
+ */
+ 
+uniform vec3 LIGHT_D0_DIR;	
+uniform float g;
+uniform float g2;
+
+
+#include <remote:mcore/shaders/core.psh>
+#include <url:/data/shader/constants_shared.vsh>
+
+// currently all lighting computation happens in worldspace
+void main()
+{
+	vec3 dir = FetchVec3(direction);
+	float fCos = dot(LIGHT_D0_DIR, dir) / length(dir);
+	float fMiePhase = 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + fCos*fCos) / pow(1.0 + g2 - 2.0*g*fCos, 1.5);
+	gl_FragColor.rgb = FetchVec3(color_a) + fMiePhase * FetchVec3(color_b);
+
+#ifdef SKY
+	gl_FragColor.rgb = clamp(gl_FragColor.rgb * 3.0, 0.0, 1.0);
+#endif
+
+	gl_FragColor.a = gl_FragColor.b;
+
+	gl_FragColor.rgb *= gl_FragColor.a;
+}
+

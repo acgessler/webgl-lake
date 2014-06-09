@@ -21,8 +21,7 @@ uniform vec4 spec_color_shininess;
 // currently all lighting computation happens in worldspace
 void main()
 {
-	// Water normal is always facing upwards ...
-	vec3 N = vec3(0.0, 1.0, 0.0);
+	vec3 N = normalize(FetchNormal());
 
 	float height_underwater = kHEIGHT_WATER_LEVEL - texture2D(heightmap, FetchTexCoord()).r;
 
@@ -38,6 +37,9 @@ void main()
 		LIGHT_D0_DIR,
 		spec_color_shininess.a
 	);
+
+	// Self-shadowing
+	specular *= clamp(diffuse * 4.0, 0.0, 1.0);
 
 	diffuse *= clamp(0.0, 1.0, height_underwater * 5.0) * 0.8;
 
