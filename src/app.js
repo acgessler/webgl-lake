@@ -143,11 +143,10 @@ function on_init_context(terrain_image, tree_image) {
 	}
 
 
-	// Add the skydome, as in the previous sample
-	//medea.LoadModules('skydome',function() {
-	//	var dome_node = medea.CreateSkydomeNode('remote:skydome_sample/midmorning/midmorning.png', 0.4);
-	//	root.AddChild(dome_node);
-    //});
+	medea.LoadModules('skybox',function() {
+		var dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
+		root.AddChild(dome_node);
+    });
 
 	
 	// And a plain camera controller
