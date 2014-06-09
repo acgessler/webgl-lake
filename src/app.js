@@ -291,9 +291,11 @@ function on_init_context(terrain_image, tree_image) {
 		var plane_anchor = medea.CreateNode();
 		plane_anchor.Rotate(Math.PI * 0.5, axes[i % 3]);
 		if ( is_back ) {
-			// Mirroring on 3 axes means that all faces need
-			// to be rendered with reverse face winding.
-			plane_anchor.Scale(-1);
+			// Mirroring on 2 axes means that the face winding is
+			// still the same, so we don't need to change culling
+			// settings. This need to be taken into account when
+			// creating the terrain image data though.
+			plane_anchor.Scale([-1, -1, 1]);
 		}
 		plane_anchor.Translate([0, TERRAIN_PLANE_WIDTH / 2, 0]);
 		plane_anchor.AddChild(plane);

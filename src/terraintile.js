@@ -11,8 +11,6 @@ var InitTerrainTileType = function(medea) {
 		lod_min : -1,
 		lod_max : -1,
 
-		is_back : false,
-
 		init : function(x, y, w, h, is_back, tile_y_mean) {
 			this._super();
 			this.x = x | 0;
@@ -50,8 +48,11 @@ var InitTerrainTileType = function(medea) {
 			material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
 			material.Pass(0).Set("uv_scale", this.w);
 			material.Pass(0).Set("sq_base_height", tile_y_mean * tile_y_mean);
-			material.Pass(0).CullFaceMode(is_back ? "back" : "front");
-			material.Pass(0).CullFace(false);
+
+			// Cull mode does not change because back-facing faces are
+			// mirrored on exactly two axes, making the face winding the same.
+			material.Pass(0).CullFaceMode("back");
+			material.Pass(0).CullFace(true);
 
 			// Attach the mesh to the scenegraph and position the tile correctly
 			this.Translate([xs, 0, ys]);
