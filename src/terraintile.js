@@ -58,6 +58,9 @@ var InitTerrainTileType = function(medea) {
 			this.Translate([xs, 0, ys]);
 			this.Scale([this.w, TERRAIN_HEIGHT_SCALE, this.h]);
 			this.AddEntity(mesh);
+
+			// No further culling
+			this.SetStaticBB(medea.BB_INFINITE);
 		},
 
 

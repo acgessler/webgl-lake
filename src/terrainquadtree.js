@@ -1,6 +1,80 @@
+
+// Compute the min and max heights of each terrain tile on each LOD level.
+// Returns a 3D array where the dimensions are:
+//   - LOD level
+//   - X axis tile index
+//   - Y axis tile index
+//
+//  And each entry is a 2-tuple containing the minimum and maximum
+//  (unscaled) heights of the tile.
+//
+// The number of LOD levels is |log2(terrain_image.GetWidth() / TILE_SIZE)|.
+function compute_bounding_boxes(terrain_image) {
+	var data = terrain_image.GetData();
+	var tile_size = TILE_SIZE;
+	var tiles_count = terrain_image.GetWidth() / tile_size;
+
+	var level_count = log2(tiles_count) + 1;
+	var bbs = new Array(level_count);
+
+	// Derive base level (lod0) from source heightmap
+	bbs[0] = new Array(tiles_count);
+	for (var y = 0; y < tiles_count; ++y) {
+		bbs[0][y] = new Array(tiles_count);
+		for (var x = 0; x < tiles_count; ++x) {
+			var vmin = 1e10;
+			var vmax = -1e10;
+			for (var yy = 0; yy < tile_size; ++yy) {
+				var ybase = (y * tile_size + yy) * TERRAIN_PLANE_WIDTH;
+				for (var xx = 0; xx < tile_size; ++xx) {
+					var src_idx = (ybase + x * tile_size + xx) * 4;
+					var height = data[src_idx];
+
+					vmin = Math.min(vmin, height);
+					vmax = Math.max(vmax, height);
+				} 
+			}
+			bbs[0][y][x] = [vmin, vmax];
+		}
+	}
+
+	// Merge upwards
+	for (var l = 1; l < level_count; ++l) {
+		var old_tiles_count = tiles_count;
+		tiles_count /= 2;
+		bbs[l] = new Array(tiles_count);
+		for (var y = 0; y < tiles_count; ++y) {
+			bbs[l][y] = new Array(tiles_count);
+			for (var x = 0; x < tiles_count; ++x) {
+				var vmin = 1e10;
+				var vmax = -1e10;
+				for (var yy = 0; yy < 2; ++yy) {
+					var ybase = y * 2 + yy;
+					for (var xx = 0; xx < 2; ++xx) {
+						var minmax = bbs[l - 1][ybase][x * 2 + xx];
+
+						vmin = Math.min(vmin, minmax[0]);
+						vmax = Math.max(vmax, minmax[1]);
+					} 
+				}
+				bbs[l][y][x] = [vmin, vmax];
+			}
+		}
+	}
+	return bbs;
+}
+
+function saturate(x) {
+	return Math.min(1.0, Math.max(0.0, x));
+}
+
 var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 	var terrain_bounding_boxes = compute_bounding_boxes(terrain_image);
-	var tree_mesh = compute_tree_mesh(terrain_image, tree_image);
+
+	var WaterTile = InitWaterTileType(medea);
+	var TerrainTile = InitTerrainTileType(medea);
+	var TreeTile = InitTreeTileType(medea, terrain_image, tree_image);
+
 
 	// Adaptive Quad-Tree node to dynamically subdivide the terrain.
 	//
@@ -50,8 +124,8 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 			this.is_back = is_back;
 
 			if (this.w === 32) {
-				this.AddEntity(tree_mesh);
 				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h));
+				this.AddChild(new TreeTile(this.x, this.y, this.w));
 			}
 
 			this.node_lod_level = log2(this.w);
@@ -73,7 +147,8 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 		// Also populates this.corner_normals with normals for each of the corners.
 		_CalculateStaticBB : function() {
 			// Take the correct y bounding segment from the lookup table we generated
-			// This gives a basic bounding box.
+			// This gives a basic bounding box that needs to be transformed by the
+			// sphere transformation.
 			var height_min_max = terrain_bounding_boxes[this.node_lod_level]
 				[this.y / this.w][this.x / this.w];
 
@@ -84,6 +159,20 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 				 height_min_max[1] * TERRAIN_HEIGHT_SCALE,
 				 (this.y + this.h) *  TILE_SIZE]);
 
+			// The static BB we set is given in local space. Two transformations get
+			// later applied to it:
+			//  i) offset to center around the plane origin
+			//  ii) rotation/scale to set the correct face
+			//
+			// While ii) is invariant to the sphere transformation, i) is not.
+			// Therefore we need to apply i) to calculate the BB and undo its
+			// effect later.
+			var world_offset_without_rotation = vec3.create([
+				TERRAIN_PLANE_OFFSET,
+				RADIUS,
+				TERRAIN_PLANE_OFFSET
+			]);
+
 			this.local_bb = medea.CreateBB(a, b);
 			
 			// Now transform this AABB by the sphere shape
@@ -93,33 +182,26 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 			// terrain plane need not to be taken into account.
 			//
 			var scratch = vec3.create();
-			var vmin = vec3.create();
-			vmin[0] = 1e10;
-			vmin[1] = 1e10;
-			vmin[2] = 1e10;
-			var vmax = vec3.create();
-			vmax[0] = -1e10;
-			vmax[1] = -1e10;
-			vmax[2] = -1e10;
+			var vmin = vec3.create([1e10, 1e10, 1e10]);
+			var vmax = vec3.create([-1e10, -1e10, -1e10]);
+
 			this.corner_normals = new Array(4);
 			for (var i = 0; i < 4; ++i) {
 				this.corner_normals[i] = vec3.create();
 			}
-			for (var i = 0; i < 8; ++i) {
-				scratch[0] = ((i & 0x1) ? b : a)[0] + TERRAIN_PLANE_OFFSET;
-				scratch[1] = RADIUS;
-				scratch[2] = ((i & 0x2) ? b : a)[2] + TERRAIN_PLANE_OFFSET;
 
+			// First consider the four inner corner points
+			for (var i = 0; i < 4; ++i) {
+				scratch[0] = ((i & 0x1) ? b : a)[0];
+				scratch[1] = 0;
+				scratch[2] = ((i & 0x2) ? b : a)[2];
+				vec3.add(scratch, world_offset_without_rotation);
 				vec3.normalize(scratch);
 
-				var height = ((i & 0x4) ? b : a)[1] + RADIUS;
-				scratch[0] *= height;
-				scratch[1] *= height;
-				scratch[2] *= height;
+				var height = a[1] + RADIUS;
+				vec3.scale(scratch, height);
 
-				if (i < 4) {
-					vec3.normalize(scratch, this.corner_normals[i]);
-				}
+				vec3.normalize(scratch, this.corner_normals[i]);
 
 				for (var j = 0; j < 3; ++j) {
 					vmin[j] = Math.min(vmin[j], scratch[j]);
@@ -127,12 +209,26 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 				}
 			}
 
-			vmin[0] -= TERRAIN_PLANE_OFFSET;
-			vmin[1] -= RADIUS;
-			vmin[2] -= TERRAIN_PLANE_OFFSET;
-			vmax[0] -= TERRAIN_PLANE_OFFSET;
-			vmax[1] -= RADIUS;
-			vmax[2] -= TERRAIN_PLANE_OFFSET;
+			// Then consider the point on the sphere tile that has the
+			// highest extent in terms of world coordinates.
+			var sx = saturate((16 - this.x) / this.w); 
+			var sy = saturate((16 - this.y) / this.w); 
+			scratch[0] = a[0] + (b[0]-a[0]) * sx;
+			scratch[1] = 0;
+			scratch[2] = a[2] + (b[2]-a[2]) * sy;
+			vec3.add(scratch, world_offset_without_rotation);
+			vec3.normalize(scratch);
+
+			var height = b[1] + RADIUS;
+			vec3.scale(scratch, height);
+
+			for (var j = 0; j < 3; ++j) {
+				vmin[j] = Math.min(vmin[j], scratch[j]);
+				vmax[j] = Math.max(vmax[j], scratch[j]);
+			}
+
+			vec3.subtract(vmin, world_offset_without_rotation);
+			vec3.subtract(vmax, world_offset_without_rotation);
 			this.SetStaticBB(medea.CreateBB(vmin, vmax));
 		},
 
@@ -144,8 +240,9 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 		Render : function(camera, rqmanager) {
 			var cam_pos = camera.GetWorldPos();
 		
-			var vmin = this.bb[0];
-			var vmax = this.bb[1];
+			var bb = this.GetWorldBB();
+			var vmin = bb[0];
+			var vmax = bb[1];
 
 			var can_subdivide = this.w != 1;
 
@@ -297,9 +394,6 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 			}
 		},
 	});
-
-	var WaterTile = InitWaterTileType(medea);
-	var TerrainTile = InitTerrainTileType(medea);
 
 	return TerrainQuadTreeNode;
 }
