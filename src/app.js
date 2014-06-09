@@ -160,6 +160,7 @@ function on_init_context(terrain_image, tree_image) {
 		
 		cam.Translate(vec3.create([1900,1900,1900]));
 		var cc = medea.CreateCamController('orbit');
+		cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
 		cc.CameraDistance(RADIUS * 2);
 		cc.MaximumCameraDistance(RADIUS * 5);
 		cc.MinimumCameraDistance(RADIUS);

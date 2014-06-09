@@ -74,7 +74,7 @@ var get_prototype_water_material = medealib.Cached(function() {
 			heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null, null,
 					// Only one channel is required
 					medea.TEXTURE_FORMAT_LUM),
-			spec_color_shininess : [0.95, 0.95, 1.0, 32.0],
+			spec_color_shininess : [0.65, 0.65, 0.7, 8.0],
 			inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH
 		}
 	);

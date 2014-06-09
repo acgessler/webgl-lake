@@ -16,11 +16,11 @@ var InitAtmosphereNodeType = function(medea) {
 					SKY : 1
 				});
 
-			var mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 64);
+			var mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 48, 6);
 			var mesh_sky = medea.CloneMesh(mesh_ground, mat_sky);
 
 			var pass = mesh_sky.Material().Pass(0);
-			pass.SetDefaultAlphaBlending();
+			pass.SetDefaultAlphaBlendingNotPremultiplied();
 			pass.DepthWrite(true);
 			//pass.DepthTest(false);
 			pass.CullFaceMode("front");
@@ -50,11 +50,13 @@ var InitAtmosphereNodeType = function(medea) {
 			pass.Set("g2", -0.95 * -0.95);
 
 			pass = mesh_ground.Material().Pass(0);
-			pass.SetDefaultAlphaBlending();
+			pass.BlendOp('add');
+			pass.BlendFunc('one', 'one_minus_src_alpha');
+			pass.BlendEnable(true);
 			pass.DepthWrite(true);
 			pass.DepthTest(false);
 			pass.CullFaceMode("back");
-			pass.CullFace(false);
+			pass.CullFace(true);
 
 
 			pass.Set("v3InvWavelength", [1.0 / pow(0.650, 4.0), 1.0 / pow(0.570, 4.0), 1.0 / pow(0.475, 4.0)]);
@@ -76,8 +78,8 @@ var InitAtmosphereNodeType = function(medea) {
 			pass.Set("fScale", 1.0 / (OUTER_RADIUS - RADIUS_GROUND));
 			pass.Set("fScaleDepth", 0.25);
 			pass.Set("fScaleOverScaleDepth", 4.0 / (OUTER_RADIUS - RADIUS_GROUND));
-			pass.Set("g", -0.95);
-			pass.Set("g2", -0.95 * -0.95);
+			//pass.Set("g", -0.95);
+			//pass.Set("g2", -0.95 * -0.95);
 
 
 			mesh_ground.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);

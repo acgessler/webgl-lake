@@ -38,7 +38,7 @@ void main()
 	vec3 world_eye = CAM_POS - sphere_world_position;
 
 	float height = ComputeHeightAt(position, dot(world_eye, world_eye) - sq_base_height, uv);
-	position.y = height * 255.0 * kTERRAIN_HEIGHT_SCALE;
+	position.y = (height * 255.0 * kTERRAIN_HEIGHT_SCALE);
 
 	vec3 sphere_world_position_with_height = sphere_world_position +
 		unit_sphere_pos * position.y;

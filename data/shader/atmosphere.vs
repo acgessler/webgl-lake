@@ -90,6 +90,7 @@ void main()
 	vec3 v3SamplePoint = v3Start + v3SampleRay * 0.5;
 
 	vec3 v3FrontColor = vec3(0.0, 0.0, 0.0);
+	vec3 v3Attenuate;
 	for(int i = 0; i< nSamples; i++)
 	{
 		float fHeight = length(v3SamplePoint);
@@ -101,14 +102,19 @@ void main()
 #else	
 		float fScatter = fDepth * fTemp - fCameraOffset;
 #endif
-		vec3 v3Attenuate = exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));
+		v3Attenuate = exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));
 		v3FrontColor += v3Attenuate * (fDepth * fScaledLength);
 		v3SamplePoint += v3SampleRay;
 	}
 
+#ifdef SKY
 	PassVec3(color_b, v3FrontColor * fKmESun);
 	PassVec3(color_a, v3FrontColor * (v3InvWavelength * fKrESun));
-	
+#else
+	PassVec3(color_b,v3FrontColor * (v3InvWavelength * fKrESun + fKmESun));
+	PassVec3(color_a, v3Attenuate);
+#endif
+
 	PassClipPosition(ModelToClipSpace(FetchPosition()));
 	PassVec3(direction, CAM_POS - v3Pos);
 }
