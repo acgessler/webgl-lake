@@ -92,11 +92,7 @@ function on_init_context(terrain_image, tree_image) {
 	viewport.ClearColor([0.0,0.0,0.0]);
 	
 	root = medea.RootNode();
-	var light = medea.CreateNode();
-	var light_entity = medea.CreateDirectionalLight([1,1,1], [0.7, -1.0,-0.7]);
-	light.AddEntity(light_entity);
-	root.AddChild(light);
-
+	
 
 /*
     var mesh_parent = medea.CreateNode();
@@ -161,8 +157,8 @@ function on_init_context(terrain_image, tree_image) {
 		cam.Translate(vec3.create([1900,1900,1900]));
 		var cc = medea.CreateCamController('orbit');
 		cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
-		cc.CameraDistance(RADIUS * 2);
-		cc.MaximumCameraDistance(RADIUS * 5);
+		cc.CameraDistance(RADIUS * 4);
+		cc.MaximumCameraDistance(RADIUS * 20);
 		cc.MinimumCameraDistance(RADIUS);
 		cc.Smoothing(true);
 		cc.SmoothSpeed(0.7);
@@ -171,22 +167,50 @@ function on_init_context(terrain_image, tree_image) {
 		cc.Enable();
 	});
 
+	var light = medea.CreateNode();
+	var light_entity = medea.CreateDirectionalLight([1,1,1], [0.7, -0.1,-0.7]);
+	light.AddEntity(light_entity);
+	root.AddChild(light);
+
 	var input_handler = medea.CreateInputHandler();
 	var light_rotation_matrix = mat4.identity(mat4.create());
 	var light_temp_dir = [0.0, 0.0, 0.0, 0.0];
-	mat4.rotate(light_rotation_matrix, 3.1415 * 2.0 / 24.0, [0.6, 0.0, 0.6]);
+	var sun = null;
+	mat4.rotate(light_rotation_matrix, 3.1415 * 2.0 / 24.0, [0.2, 1.0, 0.2]);
 	medea.SetTickCallback(function(dtime) {
 		on_tick(dtime);
 
 		if(input_handler.ConsumeKeyDown(medea.KeyCode.ENTER)) {
 			var dir = light_entity.Direction();
 			mat4.multiplyVec4(light_rotation_matrix, [dir[0], dir[1], dir[2], 0.0], light_temp_dir);
+
+			vec3.normalize(light_temp_dir);
             light_entity.Direction([light_temp_dir[0], light_temp_dir[1], light_temp_dir[2]]);
+
+            vec3.scale(light_temp_dir, -SUN_DISTANCE);
+            if (sun) {
+            	sun.LocalPos(light_temp_dir);
+            }
         }
+
+        // Update Z resolution based of the camera distance
+        var distance = vec3.length(cam.GetWorldPos());
+        distance *= 2.0;
+
+        // Must always be able to see at least the entire planet + atmosphere
+        distance = Math.max(RADIUS * 2.5, distance);
+        cam.ZFar(distance);
+        cam.ZNear(distance / 10000);
 		return true;
 	});	
 
 	root.AddChild(new AtmosphereNode(cam));
+
+	medea.LoadModules('billboard',function() {
+		sun = root.AddChild(medea.CreateBillboardNode('url:data/textures/sunsprite.png', false, true));
+		sun.Scale(SUN_SIZE);
+		sun.Translate([RADIUS * 3, RADIUS * 3, -RADIUS * 3]);
+	});
 
 	medea.SetDebugPanel(null, function() {
 		var f1 = medea.debug_panel.gui.addFolder('Terrain');

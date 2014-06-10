@@ -18,3 +18,6 @@ var TREE_WIDTH = 2.6;
 var TREE_ASPECT = 2.3;
 
 var TERRAIN_HEIGHT_SCALE = 0.55;
+
+var SUN_DISTANCE = 5.1 * RADIUS;
+var SUN_SIZE = 0.05;

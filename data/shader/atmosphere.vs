@@ -11,6 +11,7 @@
 #include <remote:mcore/shaders/core.vsh>
 #include <url:/data/shader/constants_shared.vsh>
 
+// Original (c) is Sean O'Neill, 2004
 
 uniform vec3 CAM_POS;
 uniform vec3 LIGHT_D0_DIR;		
@@ -81,7 +82,7 @@ void main()
 #endif
 	// ..
 #else
-#error blubb
+#error NIY
 #endif
 
 	float fSampleLength = fFar / fSamples;
