@@ -33,6 +33,8 @@ uniform sampler2D snow_texture;
 uniform vec4 spec_color_shininess;
 #endif
 
+uniform sampler2D treemap;
+
 uniform vec4 terrain_uv_offset_scale;
 uniform float inv_terrain_map_dim;
 uniform float uv_scale;
@@ -130,6 +132,8 @@ void main()
 		detail_normal 	* kDETAIL_NORMAL_STRENGTH
 	);
 
+	float forestation = texture2D(treemap, terrain_uv).b;
+
 	// Diffuse lighting: simple lambert against sun direction
 	float diffuse = ComputeLambertDiffuseCoeff(model_light_dir_0, N);
 
@@ -170,8 +174,10 @@ void main()
 #ifdef GAMMA
 		tex_green *= tex_green; // Gamma
 #endif
+		
 
-		float d = clamp(base_rock_blend * base_rock_blend + nor_noise_occ.b * nor_noise_occ.b, 0.0, 1.0);
+		vec2 x = vec2(base_rock_blend, nor_noise_occ.b);
+		float d = clamp(dot(x, x), 0.0, 1.0);
 		tex = mix(tex_green, tex, d);
 	}
 	else {
@@ -181,6 +187,9 @@ void main()
 		float snow_transition = (kALL_SNOW_HEIGHT - height) / (kALL_SNOW_HEIGHT - kSNOW_BEGIN);
 		tex = mix(tex_snow, tex, clamp(snow_transition + base_rock_blend, -1.0, 1.0));
 	}
+
+	// Forest areas are darker
+	tex *= max(forestation, 0.6);
 
 	// Simple fog
 	vec3 color = tex * diffuse

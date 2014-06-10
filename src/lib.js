@@ -39,6 +39,8 @@ var get_prototype_terrain_material = medealib.Cached(function() {
 		grass_texture: 'url:data/textures/terrain_detail_d.jpg',
 		snow_texture: 'url:data/textures/terrain_detail_c.jpg',
 
+		treemap: 'url:data/textures/treemap.png',
+
 		inv_terrain_map_dim: 1.0 / TERRAIN_PLANE_WIDTH,
 
 		// Use a function setter to update tweakables every frame
