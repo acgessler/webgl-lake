@@ -72,8 +72,9 @@ void main()
 #else
 
 	float fDepth = exp((fInnerRadius - fOuterRadius) / fScaleDepth);
-	float fCameraAngle = dot(-v3Ray, v3Pos) / length(v3Pos);
-	float fLightAngle = dot(LIGHT_D0_DIR, v3Pos) / length(v3Pos);
+	vec3 v3PosNorm = normalize(v3Pos);
+	float fCameraAngle = dot(-v3Ray, v3PosNorm);
+	float fLightAngle = dot(LIGHT_D0_DIR, v3PosNorm);
 	float fCameraScale = scale(fCameraAngle);
 	float fLightScale = scale(fLightAngle);
 	float fCameraOffset = fDepth * fCameraScale;
@@ -89,24 +90,28 @@ void main()
 	float fScaledLength = fSampleLength * fScale;
 	vec3 v3SampleRay = v3Ray * fSampleLength;
 	vec3 v3SamplePoint = v3Start + v3SampleRay * 0.5;
+	vec3 v3ScatterScale = v3InvWavelength * fKr4PI + fKm4PI;
 
 	vec3 v3FrontColor = vec3(0.0, 0.0, 0.0);
 	vec3 v3Attenuate;
-	for(int i = 0; i< nSamples; i++)
+	for(int i = 0; i < nSamples; i++)
 	{
 		float fHeight = length(v3SamplePoint);
 		float fDepth = exp(fScaleOverScaleDepth * (fInnerRadius - fHeight));
 #ifdef SKY
-		float fLightAngle = dot(LIGHT_D0_DIR, v3SamplePoint) / fHeight;
-		float fCameraAngle = dot(v3Ray, v3SamplePoint) / fHeight;
-		float fScatter = (fStartOffset + fDepth*(scale(fLightAngle) - scale(fCameraAngle)));
+		vec3 v3SamplePointNorm = v3SamplePoint / fHeight;
+		float fLightAngle = dot(LIGHT_D0_DIR, v3SamplePointNorm);
+		float fCameraAngle = dot(v3Ray, v3SamplePointNorm);
+		float fScatter = fStartOffset + fDepth*(scale(fLightAngle) - scale(fCameraAngle));
 #else	
 		float fScatter = fDepth * fTemp - fCameraOffset;
 #endif
-		v3Attenuate = exp(-fScatter * (v3InvWavelength * fKr4PI + fKm4PI));
-		v3FrontColor += v3Attenuate * (fDepth * fScaledLength);
+		v3Attenuate = exp(-fScatter * v3ScatterScale);
+		v3FrontColor += v3Attenuate * fDepth;
 		v3SamplePoint += v3SampleRay;
 	}
+
+	v3FrontColor *= fScaledLength;
 
 #ifdef SKY
 	PassVec3(color_b, v3FrontColor * fKmESun);
