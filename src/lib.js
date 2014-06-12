@@ -23,7 +23,28 @@ var get_prototype_terrain_mesh = medealib.Cached(function() {
 // Return the prototype material for drawing terrain. This material
 // is never used for drawing, but terrain tiles use CloneMaterial()
 // to get independent copies.
-var get_prototype_terrain_material = medealib.Cached(function() {
+var get_prototype_terrain_material = (function() {
+	var terrain_materials = {};
+	return function(climate) {
+
+	var key = climate;
+	if (terrain_materials[key]) {
+		return terrain_materials[key];
+	}
+
+	var defines = {};
+	if (climate == 'desert') {
+		defines.DESERT = '';
+	}
+
+	var heightmap;
+	if (climate == 'desert') {
+		heightmap = 'url:data/textures/heightmap1.png';
+	}
+	else {
+		heightmap = 'url:data/textures/heightmap0.png';
+	}
+
 	var constants = {
 		// TERRAIN_SPECULAR
 		// spec_color_shininess : [1,1,1,32],
@@ -37,7 +58,6 @@ var get_prototype_terrain_material = medealib.Cached(function() {
 		stone_normal_texture: 'url:data/textures/terrain_detail_b_NRM.png',
 
 		grass_texture: 'url:data/textures/terrain_detail_d.jpg',
-		snow_texture: 'url:data/textures/terrain_detail_c.jpg',
 
 		treemap: 'url:data/textures/treemap.png',
 
@@ -51,20 +71,31 @@ var get_prototype_terrain_material = medealib.Cached(function() {
 		// The heightmap needs custom parameters so we need to load it
 		// manually (this is no overhead, specifying a URL for a texture
 		// constant directly maps to medea.CreateTexture on that URL)
-		heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null,
+		heightmap : medea.CreateTexture(heightmap, null,
 			// We don't need MIPs for the heightmap anyway
 			medea.TEXTURE_FLAG_NO_MIPS |
 			// Hint to medea that the texture will be accessed
 			// from within a vertex shader.
-			medea.TEXTURE_VERTEX_SHADER_ACCESS,
+			medea.TEXTURE_VERTEX_SHADER_ACCESS |
+			medea.TEXTURE_FLAG_CLAMP_TO_EDGE,
 
 			// Only one channel is required
 			medea.TEXTURE_FORMAT_LUM),
 	};	
-	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants);
+
+	if (climate == 'desert') {
+		constants.desert_texture = 'url:data/textures/terrain_detail_e.jpg';
+	}
+	else {
+		constants.snow_texture = 'url:data/textures/terrain_detail_c.jpg';
+	}
+
+	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants, undefined, defines);
 	mat.SetIgnoreUniformVarLocationNotFound();
+	terrain_materials[key] = mat;
 	return mat;
-});
+	};
+})();
 
 // Return the prototype material for drawing water. This material
 // is never used for drawing, but water tiles use CloneMaterial()

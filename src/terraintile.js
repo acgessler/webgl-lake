@@ -11,7 +11,7 @@ var InitTerrainTileType = function(medea) {
 		lod_min : -1,
 		lod_max : -1,
 
-		init : function(x, y, w, h, is_back, tile_y_mean) {
+		init : function(x, y, w, h, is_back, tile_y_mean, climate) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
@@ -25,7 +25,7 @@ var InitTerrainTileType = function(medea) {
 			// that has its own set of constants but shares other
 			// rendering state. This will minimize the number of state
 			// changes required to draw multiple tiles.
-			var material = medea.CloneMaterial(get_prototype_terrain_material(), 
+			var material = medea.CloneMaterial(get_prototype_terrain_material(climate), 
 				medea.MATERIAL_CLONE_COPY_CONSTANTS | medea.MATERIAL_CLONE_SHARE_STATE);
 
 			// Create a clone of the mesh prototype and assign the cloned
