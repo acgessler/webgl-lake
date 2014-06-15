@@ -151,13 +151,14 @@ function on_init_context(terrain_image, tree_image) {
 
         cam.AddEntity(cc);
         cam.Translate(vec3.scale([RADIUS, RADIUS, RADIUS], 1.8));
-/*
-        var cc_fps = create_fps_cam_controller();
+
+        var SphereFpsCamController = GetSphereFpsCamControllerType(medea);
+        var cc_fps = new SphereFpsCamController();
 		cc_fps.Enable();
 
         cam_fps.AddEntity(cc_fps);
-        cam_fps.Translate(vec3.scale([RADIUS, 0.0, RADIUS], 1.0)); */
-        viewport.Camera(cam);
+        cam_fps.Translate(vec3.scale([RADIUS, 0.0, RADIUS], 1.0));
+        viewport.Camera(cam_fps);
 	});
 
 	var light = medea.CreateNode();

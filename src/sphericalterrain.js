@@ -18,7 +18,7 @@ var InitSphericalTerrainType = function(medea, terrain_image, tree_image) {
 
 			for (var i = 0; i < 6; ++i) {
 				var is_back = i >= 3;
-				var plane = new TerrainQuadTreeNode(0, 0, 32, is_back, i == 1 ? 'desert' : 'normal');
+				var plane = new TerrainQuadTreeNode(0, 0, 32, is_back, i);
 				plane.Translate([TERRAIN_PLANE_OFFSET, 0, TERRAIN_PLANE_OFFSET]);
 				var plane_anchor = medea.CreateNode();
 				
@@ -46,7 +46,14 @@ var InitSphericalTerrainType = function(medea, terrain_image, tree_image) {
 				plane_anchor.AddChild(plane);
 				this.AddChild(plane_anchor);
 			}
-		}
+		},
+
+		// Get the height (measured from RADIUS) of the terrain under any point.
+		//
+		// The returned height value includes any y scalings.
+		GetHeightAt : function(v) {
+
+		},
 	});
 
 

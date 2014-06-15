@@ -20,35 +20,36 @@ var get_prototype_terrain_mesh = medealib.Cached(function() {
 	return mesh;
 });
 
+var DESERT_IDX = 1;
+
+// For a given face of the cube, get the source heightmap index to be used
+function cube_face_idx_to_heightmap_idx(cube_face_idx) {
+	return cube_face_idx == DESERT_IDX ? 1 : 0;
+}
+
 // Return the prototype material for drawing terrain. This material
 // is never used for drawing, but terrain tiles use CloneMaterial()
 // to get independent copies.
 var get_prototype_terrain_material = (function() {
 	var terrain_materials = {};
-	return function(climate) {
+	return function(cube_face_idx) {
 
-	var key = climate;
+	var heightmap_idx = cube_face_idx_to_heightmap_idx(cube_face_idx);
+
+	var key = heightmap_idx;
 	if (terrain_materials[key]) {
 		return terrain_materials[key];
 	}
 
 	var defines = {};
-	if (climate == 'desert') {
+	if (cube_face_idx === DESERT_IDX) {
 		defines.DESERT = '';
-	}
-
-	var heightmap;
-	if (climate == 'desert') {
-		heightmap = 'url:data/textures/heightmap1.png';
-	}
-	else {
-		heightmap = 'url:data/textures/heightmap0.png';
 	}
 
 	var constants = {
 		// TERRAIN_SPECULAR
 		// spec_color_shininess : [1,1,1,32],
-		coarse_normal_texture : 'url:data/textures/heightmap0-nm_NRM.png',
+		coarse_normal_texture : 'url:data/textures/heightmap' + heightmap_idx + '-nm_NRM.png',
 		fine_normal_texture : 'url:data/textures/heightmap0-nm_NRM_2.jpg',
 
 		ground_texture: 'url:data/textures/terrain_detail_a.jpg',
@@ -71,7 +72,7 @@ var get_prototype_terrain_material = (function() {
 		// The heightmap needs custom parameters so we need to load it
 		// manually (this is no overhead, specifying a URL for a texture
 		// constant directly maps to medea.CreateTexture on that URL)
-		heightmap : medea.CreateTexture(heightmap, null,
+		heightmap : medea.CreateTexture('url:data/textures/heightmap' + heightmap_idx + '.png', null,
 			// We don't need MIPs for the heightmap anyway
 			medea.TEXTURE_FLAG_NO_MIPS |
 			// Hint to medea that the texture will be accessed
@@ -83,7 +84,7 @@ var get_prototype_terrain_material = (function() {
 			medea.TEXTURE_FORMAT_LUM),
 	};	
 
-	if (climate == 'desert') {
+	if (cube_face_idx === DESERT_IDX) {
 		constants.desert_texture = 'url:data/textures/terrain_detail_e.jpg';
 	}
 	else {
@@ -100,11 +101,21 @@ var get_prototype_terrain_material = (function() {
 // Return the prototype material for drawing water. This material
 // is never used for drawing, but water tiles use CloneMaterial()
 // to get independent copies.
-var get_prototype_water_material = medealib.Cached(function() {
+var get_prototype_water_material = (function() {
+	var water_materials = {};
+	return function(cube_face_idx) {
+
+	var heightmap_idx = cube_face_idx_to_heightmap_idx(cube_face_idx);
+
+	var key = heightmap_idx;
+	if (water_materials[key]) {
+		return water_materials[key];
+	}
 	var water_material = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/water', {
 			texture : 'url:/data/textures/water.jpg',
 			// Allocate the heightmap again, this time with MIPs as we'll otherwise suffer from aliasing
-			heightmap : medea.CreateTexture('url:data/textures/heightmap0.png', null, null,
+			heightmap : medea.CreateTexture('url:data/textures/heightmap' + heightmap_idx +'.png', null,
+					medea.TEXTURE_FLAG_CLAMP_TO_EDGE,
 					// Only one channel is required
 					medea.TEXTURE_FORMAT_LUM),
 			spec_color_shininess : [0.65, 0.65, 0.7, 8.0],
@@ -112,5 +123,7 @@ var get_prototype_water_material = medealib.Cached(function() {
 		}
 	);
 	water_material.Pass(0).SetDefaultAlphaBlending();
+	water_materials[key] = water_material;
 	return water_material;
-});
+	};
+})();

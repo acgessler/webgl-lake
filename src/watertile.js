@@ -10,13 +10,13 @@ var InitWaterTileType = function(medea) {
 
 		mesh : null,
 
-		init : function(x, y, w, h, is_back) {
+		init : function(x, y, w, h, cube_face_idx) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
 			this.w = w === undefined ? 1 : w;
 			this.h = h === undefined ? 1 : h;
-			this.is_back = is_back;
+
 
 			var xs = this.x * TILE_SIZE;
 			var ys = this.y * TILE_SIZE;
@@ -27,7 +27,7 @@ var InitWaterTileType = function(medea) {
 			this.Translate([xs, 0, ys]);
 			this.Scale([this.w, TERRAIN_HEIGHT_SCALE, this.h]);
 			
-			var water_material = medea.CloneMaterial(get_prototype_water_material());
+			var water_material = medea.CloneMaterial(get_prototype_water_material(cube_face_idx));
 			water_material.Pass(0).Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
 			var water_mesh = medea.CloneMesh(get_prototype_terrain_mesh(), water_material);
 			// The terrain mesh is a LOD mesh, but water gets drawn at LOD0

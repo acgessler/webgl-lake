@@ -30,9 +30,12 @@ uniform float fScale;
 uniform float fScaleDepth;		
 uniform float fScaleOverScaleDepth;
 
-const int nSamples = 4;
-const float fSamples = 4.0;
+const int nSamples = 2;
+const float fSamples = 2.0;
 
+#ifdef SKY
+#undef CAMERA_IN_SPACE
+#endif
 
 float scale(float fCos)
 {
@@ -83,7 +86,13 @@ void main()
 #endif
 	// ..
 #else
-#error NIY
+
+	vec3 v3Start = CAM_POS;
+	float fHeight = length(v3Start);
+	float fDepth = exp(fScaleOverScaleDepth * (fInnerRadius - fCameraHeight));
+	float fStartAngle = dot(v3Ray, v3Start) / fHeight;
+	float fStartOffset = fDepth * scale(fStartAngle);
+
 #endif
 
 	float fSampleLength = fFar / fSamples;

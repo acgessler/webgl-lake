@@ -1,6 +1,11 @@
 #ifndef INCLUDED_TERRAIN_SHARED
 #define INCLUDED_TERRAIN_SHARED
 
+// TODO: HW filtering may not work everywhere (investigate!). Also,
+// it is seemingly more shaky than regular LOD which makes me wonder
+// where the HW's approximation lies.
+//#define USE_HW_FILTERING
+
 #include <url:/data/shader/constants_shared.vsh>
 
 uniform sampler2D heightmap;
@@ -29,6 +34,7 @@ float CalcLOD(highp float sq_distance) {
 	return clamp(lod, kMIN_LOD, kMAX_LOD);
 }
 
+
 float SampleLOD(vec2 base, float lod_shift_amount) {
 	vec2 lod_shift = vec2(lod_shift_amount, lod_shift_amount);
 
@@ -49,7 +55,7 @@ float SampleLOD(vec2 base, float lod_shift_amount) {
 		texture2D(heightmap, sample_uv + sample_delta.xy).r
 	);
 	vec2 samples_mixed = mix(samples.xz, samples.yw, sample_pos.xx);
-	return mix(samples_mixed.x, samples_mixed.y, sample_pos.y);
+	return mix(samples_mixed.x, samples_mixed.y, sample_pos.y); 
 }
 
 float ComputeHeightAt(vec3 position, float sq_distance, vec2 uv) {
@@ -59,12 +65,18 @@ float ComputeHeightAt(vec3 position, float sq_distance, vec2 uv) {
 	float clod = CalcLOD(sq_distance);
 	vec2 base = terrain_uv_offset_scale.xy + uv * terrain_uv_offset_scale.zw;
 
+#ifdef USE_HW_FILTERING
+	return texture2DLod(heightmap, base * inv_terrain_map_dim, clod).r;
+#else
+	
 	// Sample the lower and the upper LOD and blend them
 	// Note: since SampleLOD() does mostly 2D vector opts,
 	// large part of this can be further vectorized.
 	float lower_lod_height = SampleLOD(base, lod_range.z);
 	float upper_lod_height = SampleLOD(base, lod_range.w);
 	return mix(lower_lod_height, upper_lod_height, clamp(clod - lod_range.x, 0.0, 1.0) );
+#endif
+
 }
 
 #endif 

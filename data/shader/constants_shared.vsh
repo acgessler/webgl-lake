@@ -11,6 +11,10 @@ const float kWATER_LEVEL = 31.04;
 const float kHEIGHT_WATER_LEVEL = (kWATER_LEVEL / kTERRAIN_HEIGHT_SCALE) / 255.0;
 
 const float kALL_SNOW_HEIGHT = 0.60;
-const float kSNOW_BEGIN = 0.54;
+const float kSNOW_BEGIN = 0.3;
+
+// Distance range within which to display tree billboards
+const float kTREE_BILLBOARD_BEGIN = kRADIUS;
+const float kTREE_BILLBOARD_END = kTILE_SIZE;
 
 #endif

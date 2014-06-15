@@ -114,9 +114,9 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 		// For each corner, a world-space normal to determine visibility
 		corner_normals : null,
 
-		climate : null,
+		cube_face_idx : null,
 
-		init : function(x, y, w, is_back, climate) {
+		init : function(x, y, w, is_back, cube_face_idx) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
@@ -124,10 +124,10 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 			// TODO: get rid of 'h' everywhere. We only use square sizes.
 			this.h = w;
 			this.is_back = is_back;
-			this.climate = climate;
+			this.cube_face_idx = cube_face_idx;
 
 			if (this.w === 32) {
-				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h));
+				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h, cube_face_idx));
 				this.AddChild(new TreeTile(this.x, this.y, this.w));
 			}
 
@@ -350,11 +350,11 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 				var y = this.y;
 				var w = this.w / 2;
 				var is_back = this.is_back;
-				var climate = this.climate;
-				sub_quads[0] = new TerrainQuadTreeNode(x    , y    , w, is_back, climate);
-				sub_quads[1] = new TerrainQuadTreeNode(x + w, y    , w, is_back, climate);
-				sub_quads[2] = new TerrainQuadTreeNode(x    , y + w, w, is_back, climate);
-				sub_quads[3] = new TerrainQuadTreeNode(x + w, y + w, w, is_back, climate);
+				var cube_face_idx = this.cube_face_idx;
+				sub_quads[0] = new TerrainQuadTreeNode(x    , y    , w, is_back, cube_face_idx);
+				sub_quads[1] = new TerrainQuadTreeNode(x + w, y    , w, is_back, cube_face_idx);
+				sub_quads[2] = new TerrainQuadTreeNode(x    , y + w, w, is_back, cube_face_idx);
+				sub_quads[3] = new TerrainQuadTreeNode(x + w, y + w, w, is_back, cube_face_idx);
 
 				this.AddChild(sub_quads[0]);
 				this.AddChild(sub_quads[1]);
@@ -374,7 +374,7 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 
 		_RenderAsSingleTile : function(clod_min, tile_y_mean) {
 			if (this.draw_tile === null) {
-				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back, tile_y_mean, this.climate);
+				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back, tile_y_mean, this.cube_face_idx);
 				this.AddChild(this.draw_tile);
 			}
 

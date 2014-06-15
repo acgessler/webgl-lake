@@ -29,6 +29,8 @@ uniform sampler2D stone_normal_texture;
 uniform sampler2D grass_texture;
 uniform sampler2D snow_texture;
 
+uniform sampler2D desert_texture;
+
 #ifdef TERRAIN_SPECULAR
 uniform vec4 spec_color_shininess;
 #endif
@@ -41,11 +43,17 @@ uniform float uv_scale;
 
 const float kDETAIL_NORMAL_STRENGTH = 2.0;
 const float kFINE_NORMAL_STRENGTH = 4.0;
-const float kCOARSE_NORMAL_STRENGTH = 6.0;
+const float kCOARSE_NORMAL_STRENGTH = 9.0;
 
+#ifdef DESERT
+const float kDETAIL_NORMAL_SCALE = 1.0;
+const float kFINE_NORMAL_SCALE = 0.045;
+const float kCOARSE_NORMAL_SCALE = 0.1;
+#else
 const float kDETAIL_NORMAL_SCALE = 1.0;
 const float kFINE_NORMAL_SCALE = 0.035;
 const float kCOARSE_NORMAL_SCALE = 0.05;
+#endif
 
 const float kSPECULAR_STRENGTH = 0.05;
 
@@ -138,7 +146,7 @@ void main()
 	float diffuse = ComputeLambertDiffuseCoeff(model_light_dir_0, N);
 
 	// Apply ambient occlusion
-	diffuse = diffuse * clamp(nor_noise_occ.a, 0.5, 1.0);
+	diffuse = diffuse * clamp(nor_noise_occ.a, 0.7, 1.0);
 
 #ifdef TERRAIN_SPECULAR
 	// Specular contribution: simple blinn with self-shadowing
@@ -160,9 +168,20 @@ void main()
 #endif
 	vec3 tex = mix(tex_base, tex_rock, base_rock_blend);
 
+#ifdef DESERT
+	float fade_desert = max(1.0 - length(terrain_uv - vec2(0.5, 0.5)) * 2.0, 0.0);
+
+	// Shift general color towards red
+	tex.rb *= 1.0 + (fade_desert * 0.3);
+
+#endif // DESERT
+
 	// Different code paths depending on whether this is a snow region
 	// or not.
-	if (height <= kSNOW_BEGIN) {
+#ifndef DESERT
+	if (height <= kSNOW_BEGIN) 
+#endif // DESERT
+	{
 		// Sampling distance grass with 0.5 the resolution looks
 		// as if the ground was populated by shrubs, which is
 		// nice. It also aways the otherwise strongly repeating
@@ -174,12 +193,19 @@ void main()
 #ifdef GAMMA
 		tex_green *= tex_green; // Gamma
 #endif
+
+#ifdef DESERT
+		vec3 tex_desert = texture2D(desert_texture, uv).rgb;
+		tex_green = mix(tex_green, tex_desert, pow(fade_desert, 0.3));
+#endif // DESERT
 		
 
 		vec2 x = vec2(base_rock_blend, nor_noise_occ.b);
 		float d = clamp(dot(x, x), 0.0, 1.0);
 		tex = mix(tex_green, tex, d);
 	}
+
+#ifndef DESERT
 	else {
 		vec3 tex_snow = texture2D(snow_texture, uv).rgb;
 		//tex_snow *= tex_snow; // Gamma
@@ -187,9 +213,12 @@ void main()
 		float snow_transition = (kALL_SNOW_HEIGHT - height) / (kALL_SNOW_HEIGHT - kSNOW_BEGIN);
 		tex = mix(tex_snow, tex, clamp(snow_transition + base_rock_blend, -1.0, 1.0));
 	}
+#endif // DESERT
 
-	// Forest areas are darker
-	tex *= max(forestation, 0.6);
+	// Forest areas are darker and greener
+	float forest_attenuation = max(forestation, 0.4);
+	tex.g += 0.25 * (1.0 - forest_attenuation);
+	tex *= forest_attenuation;
 
 	// Simple fog
 	vec3 color = tex * diffuse

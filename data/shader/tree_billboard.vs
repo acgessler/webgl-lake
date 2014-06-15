@@ -24,7 +24,7 @@ void main()
 	vec3 eye = CAM_POS - sphere_world_position;
 	vec3 eye_norm = normalize(eye);
 	// TODO: this is degenerate for up ~ eye
-	vec3 up = normalize(sphere_world_position);
+	vec3 up = normalize(sphere_world_position + eye_norm.yzx);
 	vec3 right = -cross(eye_norm, up);
 
 	// Make it a billboard by offsetting points along the plane
