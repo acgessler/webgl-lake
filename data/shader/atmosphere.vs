@@ -30,8 +30,8 @@ uniform float fScale;
 uniform float fScaleDepth;		
 uniform float fScaleOverScaleDepth;
 
-const int nSamples = 2;
-const float fSamples = 2.0;
+const int nSamples = 4;
+const float fSamples = 4.0;
 
 #ifdef SKY
 #undef CAMERA_IN_SPACE

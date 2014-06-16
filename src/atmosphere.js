@@ -5,20 +5,28 @@ var InitAtmosphereNodeType = function(medea) {
 
 		camera : null,
 
+		mat_sky_from_ground : null,
+		mat_sky : null,
+		mat_ground : null,
+		mat_ground_from_ground : null,
+
+		mesh_ground : null,
+		mesh_sky : null,
+
 		init : function() {
 			this._super();
 
 			// Compile all 4 different permutations of shaders:
 			// (ground, atmosphere) X (ground, atmosphere)
 			var shader = 'url:data/shader/atmosphere';
-			var mat_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
+			var mat_ground = this.mat_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
 				{}, null,
 				{
 					CAMERA_IN_SPACE : 1
 				}
 			);
 
-			var mat_sky = medea.CreateSimpleMaterialFromShaderPair(shader,
+			var mat_sky = this.mat_sky = medea.CreateSimpleMaterialFromShaderPair(shader,
 				{}, null,
 				{
 					CAMERA_IN_SPACE : 1,
@@ -26,21 +34,21 @@ var InitAtmosphereNodeType = function(medea) {
 				}
 			);
 /*
-			var mat_ground_from_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
+			var mat_ground_from_ground = this.mat_ground_from_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
 				{}, null,
 				{
 				}
 			); */
 
-			var mat_sky_from_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
+			var mat_sky_from_ground = this.mat_sky_from_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
 				{}, null,
 				{
 					SKY : 1
 				}
 			);
 
-			var mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 48, 6);
-			var mesh_sky = medea.CloneMesh(mesh_ground, mat_sky_from_ground);
+			var mesh_ground = this.mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 64, 6);
+			var mesh_sky = this.mesh_sky = medea.CloneMesh(mesh_ground, mat_sky);
 			mesh_ground.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
 			mesh_sky.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
 
@@ -52,6 +60,7 @@ var InitAtmosphereNodeType = function(medea) {
 			pass.CullFace(true);
 			mat_sky_from_ground.Pass(0).ShareStateWith(pass);
 
+			mat_sky.SetIgnoreUniformVarLocationNotFound();
 			this._SetupConstants(pass);
 
 			mat_ground.SetIgnoreUniformVarLocationNotFound();
@@ -80,7 +89,6 @@ var InitAtmosphereNodeType = function(medea) {
 			var node_sky = this.AddChild();
 			node_sky.AddEntity(mesh_sky);
 			node_sky.Scale(OUTER_RADIUS);
-
 		
 			this.SetStaticBB(medea.BB_INFINITE);
 		},
@@ -89,9 +97,28 @@ var InitAtmosphereNodeType = function(medea) {
 			this._super();
 			this.camera = camera;
 
-			this.LocalXAxis(camera.GetWorldXAxis());
-			this.LocalYAxis(camera.GetWorldYAxis());
-			this.LocalZAxis(camera.GetWorldZAxis());
+			// Position the half-sphere according to the camera mode
+			// (orbit mode is 90deg rotated wrt FPS mode)
+			//
+			// Also set material accordingly. Orbit camera is always treated
+			// as "from space" even though the Orbit camera technically enters
+			// the atmosphere.
+			if (camera.Name().indexOf("Orbit") !== -1) {
+				this.LocalXAxis(camera.GetWorldXAxis());
+				this.LocalYAxis(camera.GetWorldZAxis());
+				this.LocalZAxis(vec3.negate(camera.GetWorldYAxis()));
+
+				this.mesh_ground.Material(this.mat_ground);
+				this.mesh_sky.Material(this.mat_sky_from_ground);
+			}
+			else {
+				this.LocalXAxis(camera.GetWorldXAxis());
+				this.LocalYAxis(camera.GetWorldYAxis());
+				this.LocalZAxis(camera.GetWorldZAxis());
+
+				this.mesh_ground.Material(this.mat_ground);
+				this.mesh_sky.Material(this.mat_sky);
+			}
 		},
 
 		_SetupConstants : function(pass) {
@@ -111,6 +138,9 @@ var InitAtmosphereNodeType = function(medea) {
 			});
 			pass.Set("fInnerRadius", RADIUS_GROUND);
 			pass.Set("fInnerRadius2", RADIUS_GROUND * RADIUS_GROUND);
+
+			pass.Set("fOuterRadius", OUTER_RADIUS);
+ 			pass.Set("fOuterRadius2", OUTER_RADIUS * OUTER_RADIUS);
 
 			pass.Set("fKrESun", 0.0025 * 20.0);
 			pass.Set("fKmESun", 0.0010 * 20.0);

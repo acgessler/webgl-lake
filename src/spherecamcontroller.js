@@ -3,7 +3,7 @@ var GetSphereFpsCamControllerType = function(medea) {
 
 		scratch_mat : null,
 		hispeed_on_shift : true,
-		terrain_entity : null,
+		terrain_node : null,
 
 		init : function(enabled) {
 			this._super(enabled);
@@ -17,22 +17,53 @@ var GetSphereFpsCamControllerType = function(medea) {
 		HispeedOnShift : medealib.Property('hispeed_on_shift'),
 		TurnSpeed : medealib.Property('turn_speed'),
 		WalkSpeed : medealib.Property('walk_speed'),
-		TerrainEntity : medealib.Property('terrain_entity'),
+		TerrainNode : medealib.Property('terrain_node'),
+
+		Update : function(dtime, node) {
+			this._super(dtime, node);
+			var pos = node.LocalPos();
+			if (vec3.length(pos) < RADIUS) {
+				return;
+			}
+			var pos_nor = vec3.normalize(pos);
+
+			// Adjust coordinate system base to the sphere geometry.
+			// Usually this is only a very small change.
+			//node.LocalYAxis(pos_nor);
+			//node.LocalXAxis(vec3.cross(node.LocalZAxis(), pos_nor));
+			//node.LocalZAxis(vec3.cross(node.LocalXAxis(), node.LocalYAxis()));
+		},
+
+		PlaceNodeAt : function(node, v) {
+			var pos_nor = vec3.normalize(v);
+
+			node.LocalYAxis(pos_nor);
+			node.LocalXAxis(vec3.cross(node.LocalZAxis(), pos_nor));
+			node.LocalZAxis(vec3.cross(node.LocalXAxis(), node.LocalYAxis()));
+
+			node.LocalPos(vec3.scale(pos_nor, RADIUS_GROUND));
+		},
 
 
 		ProcessMouseDelta : function(dtime, n, d) {
 			var mrot = this.scratch_mat;
 
-			// process mouse movement on the y axis
+			// Process mouse movement on the y axis
 			if(d[1] !== 0) {
 				mrot = mat4.rotate(mat4.identity(mrot),-d[1]*this.turn_speed, n.LocalXAxis());
 				n.LocalYAxis(mat4.multiplyVec3(mrot,n.LocalYAxis()));
 				n.LocalZAxis(mat4.multiplyVec3(mrot,n.LocalZAxis()));
 			}
 
-			// process mouse movement on the x axis
+			// Process mouse movement on the x axis
 			if(d[0] !== 0) {
-				mrot = mat4.rotate(mat4.identity(mrot),-d[0]*this.turn_speed,[0,1,0]);
+				var pos = n.LocalPos();
+				if (vec3.length(pos) < RADIUS) {
+					return;
+				}
+				var pos_nor = vec3.normalize(pos);
+
+				mrot = mat4.rotate(mat4.identity(mrot),-d[0]*this.turn_speed, pos_nor);
 				n.LocalYAxis(mat4.multiplyVec3(mrot,n.LocalYAxis()));
 				n.LocalZAxis(mat4.multiplyVec3(mrot,n.LocalZAxis()));
 				n.LocalXAxis(vec3.cross(n.LocalYAxis(),n.LocalZAxis()));
@@ -67,7 +98,7 @@ var GetSphereFpsCamControllerType = function(medea) {
 			}
 
 			// PAGE UP
-			var terrain = this.terrain_entity;
+			var terrain = null; //this.terrain_node;
 			if(medea.IsKeyDown(33)) {
 				if (terrain) {
 					terrain.HeightOffset(terrain.HeightOffset()+ws * dtime);

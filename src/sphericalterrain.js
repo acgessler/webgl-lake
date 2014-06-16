@@ -13,12 +13,16 @@ var InitSphericalTerrainType = function(medea, terrain_image, tree_image) {
 	// Holds six quad tree nodes and transforms them to form a seamless sphere.
 	var SphericalTerrainNode = medea.Node.extend({
 
+		terrain_data : null,
+
 		init : function() {
 			this._super();
 
+			//this.terrain_data = terrain_image
+
 			for (var i = 0; i < 6; ++i) {
 				var is_back = i >= 3;
-				var plane = new TerrainQuadTreeNode(0, 0, 32, is_back, i);
+				var plane = new TerrainQuadTreeNode(0, 0, TILE_COUNT, is_back, i);
 				plane.Translate([TERRAIN_PLANE_OFFSET, 0, TERRAIN_PLANE_OFFSET]);
 				var plane_anchor = medea.CreateNode();
 				
@@ -52,7 +56,11 @@ var InitSphericalTerrainType = function(medea, terrain_image, tree_image) {
 		//
 		// The returned height value includes any y scalings.
 		GetHeightAt : function(v) {
+			var v_norm = vec.normalize(v, vec3.create());
 
+			// Find out which side to look at
+
+			return RADIUS;
 		},
 	});
 

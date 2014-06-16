@@ -116,8 +116,8 @@ function on_init_context(terrain_image, tree_image) {
 	var AtmosphereNode = InitAtmosphereNodeType(medea);
 	
 	var SphericalTerrainNode = InitSphericalTerrainType(medea, terrain_image, tree_image);
-	root.AddChild(new SphericalTerrainNode());
-
+	var terrain_root = new SphericalTerrainNode();
+	root.AddChild(terrain_root);
 
 	medea.LoadModules('skybox',function() {
 		var dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
@@ -126,11 +126,11 @@ function on_init_context(terrain_image, tree_image) {
 
 	
 	// And a plain camera controller
-	var cam = medea.CreateCameraNode();
+	var cam = medea.CreateCameraNode("Orbit");
 	cam.ZNear(1);
 	cam.ZFar(10000);
 
-	var cam_fps = medea.CreateCameraNode();
+	var cam_fps = medea.CreateCameraNode("FPS");
 	cam_fps.ZNear(1);
 	cam_fps.ZFar(10000);
 
@@ -154,11 +154,12 @@ function on_init_context(terrain_image, tree_image) {
 
         var SphereFpsCamController = GetSphereFpsCamControllerType(medea);
         var cc_fps = new SphereFpsCamController();
+        cc_fps.TerrainNode(terrain_root);
 		cc_fps.Enable();
 
         cam_fps.AddEntity(cc_fps);
-        cam_fps.Translate(vec3.scale([RADIUS, 0.0, RADIUS], 1.0));
-        viewport.Camera(cam_fps);
+       	cc_fps.PlaceNodeAt(cam_fps, [0.5, 1.0, 0.3]);
+        viewport.Camera(cam);
 	});
 
 	var light = medea.CreateNode();
