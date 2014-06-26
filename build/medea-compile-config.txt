@@ -11,12 +11,18 @@ viewport
 material
 camcontroller
 skydome
+skybox
 sceneloader
 sceneloader_assimp2json
 forwardrenderer
 light
 input
 renderer
+input_handler
+keycodes
+billboard
+standardmesh
+terraintile
 
 [resources]
 remote:mcore/shaders/core.psh=data/mcore/shaders/core.psh

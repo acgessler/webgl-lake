@@ -121,10 +121,8 @@ function on_init_context(terrain_image, tree_image) {
 	var terrain_root = new SphericalTerrainNode();
 	root.AddChild(terrain_root);
 
-	medea.LoadModules('skybox',function() {
-		var dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
-		root.AddChild(dome_node);
-    });
+	var dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
+	root.AddChild(dome_node);
 
 	
 	// And a plain camera controller
@@ -139,29 +137,27 @@ function on_init_context(terrain_image, tree_image) {
 	root.AddChild(cam);
 	root.AddChild(cam_fps);
 
-	medea.LoadModules('camcontroller',function() {
-		viewport.Camera(cam);
+	viewport.Camera(cam);
 
-		var cc = new medea.OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
-		cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
-		cc.CameraDistance(INITIAL_ORBIT_CAM_DISTANCE);
-		cc.MaximumCameraDistance(MAX_ORBIT_CAM_DISTANCE);
-		cc.MinimumCameraDistance(RADIUS);
-		cc.Smoothing(true);
-		cc.SmoothSpeed(CAM_SMOOTH_SPEED);
+	var cc = new medea.OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
+	cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
+	cc.CameraDistance(INITIAL_ORBIT_CAM_DISTANCE);
+	cc.MaximumCameraDistance(MAX_ORBIT_CAM_DISTANCE);
+	cc.MinimumCameraDistance(RADIUS);
+	cc.Smoothing(true);
+	cc.SmoothSpeed(CAM_SMOOTH_SPEED);
 
-        cam.AddEntity(cc);
-        cam.Translate(vec3.scale([RADIUS, RADIUS, RADIUS], 1.8));
+    cam.AddEntity(cc);
+    cam.Translate(vec3.scale([RADIUS, RADIUS, RADIUS], 1.8));
 
-        var SphereFpsCamController = GetSphereFpsCamControllerType(medea);
-        var cc_fps = new SphereFpsCamController();
-        cc_fps.TerrainNode(terrain_root);
-		cc_fps.Enable();
+    var SphereFpsCamController = GetSphereFpsCamControllerType(medea);
+    var cc_fps = new SphereFpsCamController();
+    cc_fps.TerrainNode(terrain_root);
+	cc_fps.Enable();
 
-        cam_fps.AddEntity(cc_fps);
-       	cc_fps.PlaceNodeAt(cam_fps, [0.5, 1.0, 0.3]);
-        viewport.Camera(cam);
-	});
+    cam_fps.AddEntity(cc_fps);
+   	cc_fps.PlaceNodeAt(cam_fps, [0.5, 1.0, 0.3]);
+    viewport.Camera(cam);
 
 	var light = medea.CreateNode();
 	var light_entity = medea.CreateDirectionalLight([1,1,1]);
@@ -254,7 +250,9 @@ function run() {
 		'input_handler',
 		'keycodes',
 		'skydome',
-		'billboard'
+		'billboard',
+		'camcontroller',
+		'skybox'
 	];
 	medealib.CreateContext('game_container', {dataroot: '../medea/data'}, deps, function(_medea) {
 		
