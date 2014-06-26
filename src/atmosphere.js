@@ -1,23 +1,22 @@
 var InitAtmosphereNodeType = function(medea) {
-	// Leaf that actually draws a terrain tile (of any power-of-two size)
-	// Could be part of TerrainQuadTreeNode, but factored out to keep things easy.
+	// Draws the atmosphere with scattering and cloud layer from space as well
+	// as a static, skydome-based version on ground level.
 	var AtmosphereNode = medea.Node.extend({
 
 		camera : null,
 
-		mat_sky_from_ground : null,
 		mat_sky : null,
 		mat_ground : null,
-		mat_ground_from_ground : null,
-
 		mesh_ground : null,
 		mesh_sky : null,
+		node_ground : null,
+		node_sky : null,
+
+		node_clouds : null,
 
 		init : function() {
 			this._super();
-
-			// Compile all 4 different permutations of shaders:
-			// (ground, atmosphere) X (ground, atmosphere)
+			
 			var shader = 'url:data/shader/atmosphere';
 			var mat_ground = this.mat_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
 				{}, null,
@@ -33,24 +32,11 @@ var InitAtmosphereNodeType = function(medea) {
 					SKY : 1
 				}
 			);
-/*
-			var mat_ground_from_ground = this.mat_ground_from_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
-				{}, null,
-				{
-				}
-			); */
-
-			var mat_sky_from_ground = this.mat_sky_from_ground = medea.CreateSimpleMaterialFromShaderPair(shader,
-				{}, null,
-				{
-					SKY : 1
-				}
-			);
 
 			var mesh_ground = this.mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 64, 6);
 			var mesh_sky = this.mesh_sky = medea.CloneMesh(mesh_ground, mat_sky);
-			mesh_ground.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
-			mesh_sky.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
+			mesh_ground.RenderQueue(medea.RENDERQUEUE_LAST);
+			mesh_sky.RenderQueue(medea.RENDERQUEUE_LAST);
 
 			var pass = mat_sky.Pass(0);
 			pass.SetDefaultAlphaBlendingNotPremultiplied();
@@ -58,19 +44,12 @@ var InitAtmosphereNodeType = function(medea) {
 			//pass.DepthTest(false);
 			pass.CullFaceMode("front");
 			pass.CullFace(true);
-			mat_sky_from_ground.Pass(0).ShareStateWith(pass);
 
 			mat_sky.SetIgnoreUniformVarLocationNotFound();
-			this._SetupConstants(pass);
+			this._SetupScatteringConstants(pass);
 
 			mat_ground.SetIgnoreUniformVarLocationNotFound();
 			mat_ground.Pass(0).CopyConstantsFrom(pass);
-
-			//mat_ground_from_ground.SetIgnoreUniformVarLocationNotFound();
-			//mat_ground_from_ground.Pass(0).CopyConstantsFrom(pass);
-
-			mat_sky_from_ground.SetIgnoreUniformVarLocationNotFound();
-			mat_sky_from_ground.Pass(0).CopyConstantsFrom(pass);
 
 			pass = mat_ground.Pass(0);
 			pass.BlendOp('add');
@@ -80,16 +59,18 @@ var InitAtmosphereNodeType = function(medea) {
 			pass.DepthTest(false);
 			pass.CullFaceMode("back");
 			pass.CullFace(true);
-			//mat_ground_from_ground.Pass(0).ShareStateWith(pass);
 
-			var node_ground = this.AddChild();
+			var node_ground = this.node_ground = this.AddChild();
 			node_ground.AddEntity(mesh_ground);
 			node_ground.Scale(RADIUS_GROUND);
 
-			var node_sky = this.AddChild();
+			var node_sky = this.node_sky = this.AddChild();
 			node_sky.AddEntity(mesh_sky);
 			node_sky.Scale(OUTER_RADIUS);
+
+			this._SetupCloudLayer();
 		
+			// Prevent any culling on this node or its children
 			this.SetStaticBB(medea.BB_INFINITE);
 		},
 
@@ -110,18 +91,39 @@ var InitAtmosphereNodeType = function(medea) {
 
 				this.mesh_ground.Material(this.mat_ground);
 				this.mesh_sky.Material(this.mat_sky_from_ground);
+
+				this.node_ground.Enabled(true);
+				this.node_sky.Enabled(true);
 			}
 			else {
-				this.LocalXAxis(camera.GetWorldXAxis());
-				this.LocalYAxis(camera.GetWorldYAxis());
-				this.LocalZAxis(camera.GetWorldZAxis());
-
-				this.mesh_ground.Material(this.mat_ground);
-				this.mesh_sky.Material(this.mat_sky);
+				this.node_ground.Enabled(false);
+				this.node_sky.Enabled(false);
 			}
 		},
 
-		_SetupConstants : function(pass) {
+
+		_SetupCloudLayer : function() {
+			var shader = 'url:data/shader/clouds';
+			var mat_clouds = this.mat_sky = medea.CreateSimpleMaterialFromShaderPair(shader, {
+				texture : 'url:data/textures/clouds.png'
+			});
+
+			var mesh_clouds = this.mesh_clouds = medea.CloneMesh(this.mesh_ground, mat_clouds);
+			mesh_clouds.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
+
+			var pass = mat_clouds.Pass(0);
+			pass.SetDefaultAlphaBlendingNotPremultiplied();
+			pass.DepthWrite(false);
+			pass.DepthTest(false);
+			pass.CullFaceMode("back");
+			pass.CullFace(true);
+
+			var node_clouds = this.node_clouds = this.AddChild();
+			node_clouds.AddEntity(mesh_clouds);
+			node_clouds.Scale(CLOUDS_RADIUS);
+		},
+
+		_SetupScatteringConstants : function(pass) {
 			var pow = Math.pow;
 			pass.Set("v3InvWavelength", [1.0 / pow(0.650, 4.0), 1.0 / pow(0.570, 4.0), 1.0 / pow(0.475, 4.0)]);
 

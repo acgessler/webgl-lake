@@ -86,9 +86,6 @@ function build_grass_mesh() {
 
 // Invoked once the medea context (global |medea|) is ready to use
 function on_init_context(terrain_image, tree_image) {
-	
-
-
 	console.log("Context created, setting up scene");
 	viewport = medea.CreateViewport();
 	viewport.ClearColor([0.0,0.0,0.0]);
@@ -259,7 +256,7 @@ function run() {
 		// We only create one medea instance so make it global
 		medea = _medea;
 
-		// Load the terrain base image
+		// Load the terrain base images upfront
 		medea.CreateImage('url:data/textures/heightmap0.png', function(img) {
 			medea.CreateImage('url:data/textures/treemap.png', function(tree_img) {
 				on_init_context(img, tree_img);
