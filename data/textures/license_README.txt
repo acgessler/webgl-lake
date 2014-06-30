@@ -18,3 +18,9 @@ terrain_detail_a.jpg
 ====================
 
 I own a license to use those textures in my work. You don't, so don't use them. Contact me for more info.
+
+clouds.jpg
+====================
+
+Public domain from
+http://www.shadedrelief.com/natural3/pages/use.html

@@ -105,7 +105,8 @@ var InitAtmosphereNodeType = function(medea) {
 		_SetupCloudLayer : function() {
 			var shader = 'url:data/shader/clouds';
 			var mat_clouds = this.mat_sky = medea.CreateSimpleMaterialFromShaderPair(shader, {
-				texture : 'url:data/textures/clouds.png'
+				texture : medea.CreateTexture('url:data/textures/clouds.jpg', null, 0, medea.TEXTURE_FORMAT_LUM),
+				inv_cloud_radius : 1.0 / CLOUDS_RADIUS
 			});
 
 			var mesh_clouds = this.mesh_clouds = medea.CloneMesh(this.mesh_ground, mat_clouds);
