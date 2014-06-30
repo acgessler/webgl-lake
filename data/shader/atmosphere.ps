@@ -23,9 +23,9 @@ void main()
 
 	float fMiePhase = 1.5 * ((1.0 - g2) / (2.0 + g2)) * (1.0 + fCos*fCos) / pow(1.0 + g2 - 2.0*g*fCos, 1.5);
 	gl_FragColor.rgb = FetchVec3(color_a) + fMiePhase * FetchVec3(color_b);
-	//gl_FragColor.rgb = clamp(gl_FragColor.rgb * 0.005, vec3(0.0, 0.0, 0.0), vec3(1.0, 1.0, 1.0) );
+	
+	gl_FragColor.rgb = max(1.0 - exp(gl_FragColor.rgb * - 0.2), vec3(0.0, 0.0, 0.0));
 	gl_FragColor.a = clamp(gl_FragColor.b, 0.0, 1.0);
-	gl_FragColor.rgb = 1.0 - exp(gl_FragColor.rgb * -0.05);
 #else
 	// Blend equation should be:
 	// dst_color * FetchVec3(color_a) * 0.2 + FetchVec3(color_b)
