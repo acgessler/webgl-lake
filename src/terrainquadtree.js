@@ -126,7 +126,7 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 			this.is_back = is_back;
 			this.cube_face_idx = cube_face_idx;
 
-			if (this.w === 32) {
+			if (this.w === TILE_COUNT) {
 				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h, cube_face_idx));
 				this.AddChild(new TreeTile(this.x, this.y, this.w));
 			}

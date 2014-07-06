@@ -4,6 +4,10 @@ var medea = null;
 var viewport = null;
 var root = null;
 
+
+// Global state
+var global_camera_height = RADIUS;
+
 // Variables accessible via dat.gui
 var lod_attenuation = 0.5;
 var auto_rotate_sun = true;
@@ -122,19 +126,10 @@ function on_init_context(terrain_image, tree_image) {
 	root.AddChild(dome_node);
 
 	
-	// And a plain camera controller
+	// And the orbit camera 
 	var cam = medea.CreateCameraNode("Orbit");
 	cam.ZNear(1);
 	cam.ZFar(10000);
-
-	var cam_fps = medea.CreateCameraNode("FPS");
-	cam_fps.ZNear(1);
-	cam_fps.ZFar(10000);
-
-	root.AddChild(cam);
-	root.AddChild(cam_fps);
-
-	viewport.Camera(cam);
 
 	var cc = new medea.OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
 	cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
@@ -146,6 +141,16 @@ function on_init_context(terrain_image, tree_image) {
 
     cam.AddEntity(cc);
     cam.Translate(vec3.scale([RADIUS, RADIUS, RADIUS], 1.8));
+
+	// Add the FPS camera
+	var cam_fps = medea.CreateCameraNode("FPS");
+	cam_fps.ZNear(1);
+	cam_fps.ZFar(10000);
+
+	root.AddChild(cam);
+	root.AddChild(cam_fps);
+
+	viewport.Camera(cam);
 
     var SphereFpsCamController = GetSphereFpsCamControllerType(medea);
     var cc_fps = new SphereFpsCamController();
@@ -207,19 +212,23 @@ function on_init_context(terrain_image, tree_image) {
         	set_time_of_day((time_of_day + dtime * SUN_MOVE_SPEED) % 24.0);
         }
 
-        // Update Z resolution based of the camera distance
+        // Update Z resolution based on the camera distance
         var distance = vec3.length(cam.GetWorldPos());
         distance *= 2.0;
 
         // Must always be able to see at least the entire planet + atmosphere + sun
         distance = Math.max((RADIUS + SUN_DISTANCE) * 1.01, distance);
         cam.ZFar(distance);
+
+        // Use a fixed 1:10000 ratio for the zplane distance
         cam.ZNear(distance / 10000);
+
+        // Store the current camera height over the ground
+        global_camera_height = cc.camera_distance - RADIUS;
 		return true;
 	});	
 
 	root.AddChild(new AtmosphereNode(cam));
-
 
 
 	medea.SetDebugPanel(null, function() {
