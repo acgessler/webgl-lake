@@ -14,7 +14,7 @@ void main()
   float lighting = clamp(dot(LIGHT_D0_DIR, nor) + 0.1, 0.0, 1.0);
   float sqLighting = sqrt(lighting);
   vec4 color = texture2D(texture, FetchTexCoord());
-  gl_FragColor.rgb = vec3(1.0, 1.0, 1.0) * sqLighting * 0.8;
+  gl_FragColor.rgb = vec3(1.0, 1.0, 1.0) * sqLighting * 0.9;
   gl_FragColor.a = color.r * sqLighting;
 }
 
