@@ -32,7 +32,7 @@ var InitWaterTileType = function(medea) {
 
 			// See water.vs
 			water_material.Pass(0).Set("zfighting_avoidance_factor", function() {
-				return Math.min(1.0, Math.max(0.0, (global_camera_height - RADIUS * 0.5) / RADIUS)) * 0.01;
+				return Math.min(1.0, Math.max(0.0, (global_camera_height - RADIUS * 0.5) / RADIUS)) * 0.012;
 			});
 			var water_mesh = medea.CloneMesh(get_prototype_terrain_mesh(), water_material);
 			// The terrain mesh is a LOD mesh, but water gets drawn at LOD0
