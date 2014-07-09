@@ -4,16 +4,20 @@
 #include <remote:mcore/shaders/core.vsh>
 
 uniform float inv_cloud_radius;
+uniform vec3 CAM_POS;
 
 const float PI = 3.1415926;
 const float INV_PI = 1.0 / PI;
+
 
 void main()
 {
 	PassClipPosition(ModelToClipSpace(FetchPosition()));
 
-	vec3 unitsphere_world_position = ModelToWorldSpace(FetchPosition()) * inv_cloud_radius;
+	vec3 world_position = ModelToWorldSpace(FetchPosition());
+	vec3 unitsphere_world_position = world_position * inv_cloud_radius;
 	PassNormal(normalize(unitsphere_world_position));
+	PassVec3(eye, world_position - CAM_POS);
 
 	// Generate texture coordinates. We cannot pre-compute them
 	// since the cloud layer is drawn as half-sphere that is
