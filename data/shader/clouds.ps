@@ -11,6 +11,7 @@ const float kDISTANCE_SCALE = kMAX_DISTANCE - kMIN_DISTANCE;
 
 void main()
 {
+  
   vec3 nor = normalize(FetchNormal());
   vec4 color = texture2D(texture, FetchTexCoord());
 
@@ -35,6 +36,6 @@ void main()
   if (color.r < 0.15) {
     discard;
   }
-  gl_FragColor.a = color.r * sq_lighting.y * distance_scale;
+  gl_FragColor.a = color.r * distance_scale * sq_lighting.y;
 }
 

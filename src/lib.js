@@ -98,8 +98,6 @@ var get_prototype_terrain_material = (function() {
 	var state = mat.Pass(0).State();
 	state.stencil_func = ['equal', 0x1, 0xff];
 	state.stencil_test = true;
-	//state.stencil_op = ['keep', 'keep', 'replace'];
-
 	return mat;
 	};
 })();
