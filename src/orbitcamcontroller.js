@@ -63,14 +63,21 @@ var GetOrbitCamControllerType = function(medea) {
 					threshold += ORBIT_CAM_BLEND_TO_FPS_START_HEIGHT;
 					if (dist < threshold) {
 						var f = saturate((threshold - dist) / ORBIT_CAM_BLEND_TO_FPS_START_HEIGHT);
-						vup[0] = lerp(vup[0], veye[0], f);
-						vup[1] = lerp(vup[1], veye[1], f);
-						vup[2] = lerp(vup[2], veye[2], f);
+						vec3.lerp(vup, veye, f);
+						vec3.normalize(vup);
 
-						f = 1.0 - f;
-						veye[0] = lerp(0, veye[0], f);
-						veye[1] = lerp(0, veye[1], f);
-						veye[2] = lerp(1, veye[2], f);
+						// Pick a vector perpendicular to the current eye vector
+						// To avoid a discontinuity during interpolation.
+						//
+						// Project it onto the sphere surface
+						// TODO: use world camera up
+						var vground = [1 + veye[0], veye[1], 1 + veye[2]];
+						vec3.normalize(vground);
+						vec3.subtract(vground, veye, vground);
+						vec3.normalize(vground);
+
+						vec3.lerp(veye, vground, f);
+						vec3.normalize(veye);
 					}
 				}
 
