@@ -1,6 +1,5 @@
 
 // Global medea instance
-var medea = null;
 var viewport = null;
 var root = null;
 
@@ -22,9 +21,7 @@ function on_tick(dtime) {
 	return true;
 }
 
-function log2(x) {
-	return Math.log(x) / Math.log(2.0);
-}
+
 
 // Given an approximate |sq_distance| of an object, determine the
 // continuous LOD (CLOD) value for it. CLOD is in [0, COUNT_LOD_LEVELS[
@@ -89,7 +86,7 @@ function build_grass_mesh() {
 
 
 // Invoked once the medea context (global |medea|) is ready to use
-function on_init_context(terrain_image, tree_image) {
+function on_init_context(resources) {
 	console.log("Context created, setting up scene");
 	viewport = medea.CreateViewport();
 	viewport.ClearColor([0.0,0.0,0.0]);
@@ -118,7 +115,7 @@ function on_init_context(terrain_image, tree_image) {
 
 	var AtmosphereNode = InitAtmosphereNodeType(medea);
 	
-	var SphericalTerrainNode = InitSphericalTerrainType(medea, terrain_image, tree_image);
+	var SphericalTerrainNode = InitSphericalTerrainType(medea, resources);
 	var terrain_root = new SphericalTerrainNode();
 	root.AddChild(terrain_root);
 
@@ -131,7 +128,9 @@ function on_init_context(terrain_image, tree_image) {
 	cam.ZNear(1);
 	cam.ZFar(10000);
 
-	var cc = new medea.OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
+	var OrbitCamController = GetOrbitCamControllerType(medea);
+	var cc = new  OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
+	cc.TerrainNode(terrain_root);
 	cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
 	cc.CameraDistance(INITIAL_ORBIT_CAM_DISTANCE);
 	cc.MaximumCameraDistance(MAX_ORBIT_CAM_DISTANCE);
@@ -265,11 +264,31 @@ function run() {
 		// We only create one medea instance so make it global
 		medea = _medea;
 
-		// Load the terrain base images upfront
-		medea.CreateImage('url:data/textures/heightmap0.png', function(img) {
-			medea.CreateImage('url:data/textures/treemap.png', function(tree_img) {
-				on_init_context(img, tree_img);
-			});
-		});
+		// List of images that are always loaded upfront
+		var resources = {
+			'heightmap_0' : 'url:data/textures/heightmap0.png',
+			'heightmap_1' : 'url:data/textures/heightmap1.png',
+			'treemap_0' : 'url:data/textures/treemap.png',
+			'treemap_1' : 'url:data/textures/treemap.png',
+		};
+
+		var images = {
+		};
+
+		var countdown = 0;
+		for (var k in resources) {
+			++countdown;
+		}
+		for (var k in resources) {
+			medea.CreateImage(resources[k], (function(k) {
+				return function(img) {
+					images[k] =  img;
+					if (--countdown === 0) {
+						on_init_context(images);
+					}
+				};
+			})(k))
+			;
+		}
 	}, on_init_error);
 }

@@ -1,79 +1,96 @@
 
-// Compute the min and max heights of each terrain tile on each LOD level.
-// Returns a 3D array where the dimensions are:
-//   - LOD level
-//   - X axis tile index
-//   - Y axis tile index
-//
-//  And each entry is a 2-tuple containing the minimum and maximum
-//  (unscaled) heights of the tile.
-//
-// The number of LOD levels is |log2(terrain_image.GetWidth() / TILE_SIZE)|.
-function compute_bounding_boxes(terrain_image) {
-	var data = terrain_image.GetData();
-	var tile_size = TILE_SIZE;
-	var tiles_count = terrain_image.GetWidth() / tile_size;
 
-	var level_count = log2(tiles_count) + 1;
-	var bbs = new Array(level_count);
+var InitTerrainQuadTreeType = function(medea, resources) {
+	// Compute the min and max heights of each terrain tile on each LOD level
+	// for the given cube face.
+	//
+	// Returns as a 3D array as follows:
+	//   - LOD level
+	//   - X axis tile index
+	//   - Y axis tile index
+	//
+	//  And each entry is a 2-tuple containing the minimum and maximum
+	//  (unscaled) heights of the tile.
+	//
+	// The number of LOD levels is |log2(terrain_image.GetWidth() / TILE_SIZE)|.
+	var compute_bounding_boxes = (function() {
+		var bounding_boxes = {};
+		return function(cube_face_idx) {
 
-	// Derive base level (lod0) from source heightmap
-	bbs[0] = new Array(tiles_count);
-	for (var y = 0; y < tiles_count; ++y) {
-		bbs[0][y] = new Array(tiles_count);
-		for (var x = 0; x < tiles_count; ++x) {
-			var vmin = 1e10;
-			var vmax = -1e10;
-			for (var yy = 0; yy < tile_size; ++yy) {
-				var ybase = (y * tile_size + yy) * TERRAIN_PLANE_WIDTH;
-				for (var xx = 0; xx < tile_size; ++xx) {
-					var src_idx = (ybase + x * tile_size + xx) * 4;
-					var height = data[src_idx];
+		var heightmap_idx = cube_face_idx_to_heightmap_idx(cube_face_idx);
 
-					vmin = Math.min(vmin, height);
-					vmax = Math.max(vmax, height);
-				} 
-			}
-			bbs[0][y][x] = [vmin, vmax];
+		var key = heightmap_idx;
+		if (bounding_boxes[key]) {
+			return bounding_boxes[key];
 		}
-	}
 
-	// Merge upwards
-	for (var l = 1; l < level_count; ++l) {
-		var old_tiles_count = tiles_count;
-		tiles_count /= 2;
-		bbs[l] = new Array(tiles_count);
+		var terrain_image = resources['heightmap_' + heightmap_idx];
+
+		var data = terrain_image.GetData();
+		var tile_size = TILE_SIZE;
+		var tiles_count = terrain_image.GetWidth() / tile_size;
+
+		var level_count = log2(tiles_count) + 1;
+		var bbs = new Array(level_count);
+
+		// Derive base level (lod0) from source heightmap
+		bbs[0] = new Array(tiles_count);
 		for (var y = 0; y < tiles_count; ++y) {
-			bbs[l][y] = new Array(tiles_count);
+			bbs[0][y] = new Array(tiles_count);
 			for (var x = 0; x < tiles_count; ++x) {
 				var vmin = 1e10;
 				var vmax = -1e10;
-				for (var yy = 0; yy < 2; ++yy) {
-					var ybase = y * 2 + yy;
-					for (var xx = 0; xx < 2; ++xx) {
-						var minmax = bbs[l - 1][ybase][x * 2 + xx];
+				for (var yy = 0; yy < tile_size; ++yy) {
+					var ybase = (y * tile_size + yy) * TERRAIN_PLANE_WIDTH;
+					for (var xx = 0; xx < tile_size; ++xx) {
+						var src_idx = (ybase + x * tile_size + xx) * 4;
+						var height = data[src_idx];
 
-						vmin = Math.min(vmin, minmax[0]);
-						vmax = Math.max(vmax, minmax[1]);
+						vmin = Math.min(vmin, height);
+						vmax = Math.max(vmax, height);
 					} 
 				}
-				bbs[l][y][x] = [vmin, vmax];
+				bbs[0][y][x] = [vmin, vmax];
 			}
 		}
-	}
-	return bbs;
-}
 
-function saturate(x) {
-	return Math.min(1.0, Math.max(0.0, x));
-}
+		// Merge upwards
+		for (var l = 1; l < level_count; ++l) {
+			var old_tiles_count = tiles_count;
+			tiles_count /= 2;
+			bbs[l] = new Array(tiles_count);
+			for (var y = 0; y < tiles_count; ++y) {
+				bbs[l][y] = new Array(tiles_count);
+				for (var x = 0; x < tiles_count; ++x) {
+					var vmin = 1e10;
+					var vmax = -1e10;
+					for (var yy = 0; yy < 2; ++yy) {
+						var ybase = y * 2 + yy;
+						for (var xx = 0; xx < 2; ++xx) {
+							var minmax = bbs[l - 1][ybase][x * 2 + xx];
 
-var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
-	var terrain_bounding_boxes = compute_bounding_boxes(terrain_image);
+							vmin = Math.min(vmin, minmax[0]);
+							vmax = Math.max(vmax, minmax[1]);
+						} 
+					}
+					bbs[l][y][x] = [vmin, vmax];
+				}
+			}
+		}
+		bounding_boxes[key] = bbs;
+		return bbs;
+		};
+	})();
+
+
+	var bounding_boxes_cache = {
+
+	};
+
 
 	var WaterTile = InitWaterTileType(medea);
 	var TerrainTile = InitTerrainTileType(medea);
-	var TreeTile = InitTreeTileType(medea, terrain_image, tree_image);
+	var TreeTile = InitTreeTileType(medea, resources);
 
 
 	// Adaptive Quad-Tree node to dynamically subdivide the terrain.
@@ -128,7 +145,7 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 
 			if (this.w === TILE_COUNT) {
 				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h, cube_face_idx));
-				this.AddChild(new TreeTile(this.x, this.y, this.w));
+				//this.AddChild(new TreeTile(this.x, this.y, this.w));
 			}
 
 			this.node_lod_level = log2(this.w);
@@ -139,16 +156,34 @@ var InitTerrainQuadTreeType = function(medea, terrain_image, tree_image) {
 			// - quadtree nodes are added lazily, so initially everything is
 			//   empty. Nothing would get drawn, and the quadtree would
 			//   therefore not get further subdivided.
-			// - The transformation to spherical shape is applied external to
+			// - The transformation to spherical shape is applied outside of
 			//   medea's transformation system (since the transformation
-			//   is non-linear), so BB calculation would give wrong results.
+			//   is non-linear), so automatic BB calculation would not take
+			//   it into account.
 			this._CalculateStaticBB();
+		},
+
+		// Get the height of the terrain at a given 2D x,y coordinate
+		//
+		// The returned height value includes the height scaling of the terrain.
+		GetHeightAt : function(x, y) {
+			// Any level of the tree can respond to a query for any position
+			// as long as all the terrain fits in a single texture. If this
+			// change, this would need to recurse into the tree.
+			x = Math.floor(x);
+			y = Math.floor(y);
+
+			var image = resources['heightmap_' + cube_face_idx_to_heightmap_idx(this.cube_face_idx)];
+			var data = image.GetData();
+			return data[(y * image.GetWidth() + x) * 4] * TERRAIN_HEIGHT_SCALE;
 		},
 
 		// Populates the node's BB with a static AABB that reflects the sphere shape.
 		//
 		// Also populates this.corner_normals with normals for each of the corners.
 		_CalculateStaticBB : function() {
+			var terrain_bounding_boxes = compute_bounding_boxes(this.cube_face_idx);
+
 			// Take the correct y bounding segment from the lookup table we generated
 			// This gives a basic bounding box that needs to be transformed by the
 			// sphere transformation.

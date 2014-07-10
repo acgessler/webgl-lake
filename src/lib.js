@@ -20,13 +20,6 @@ var get_prototype_terrain_mesh = medealib.Cached(function() {
 	return mesh;
 });
 
-var DESERT_IDX = 1;
-
-// For a given face of the cube, get the source heightmap index to be used
-function cube_face_idx_to_heightmap_idx(cube_face_idx) {
-	return cube_face_idx == DESERT_IDX ? 1 : 0;
-}
-
 // Return the prototype material for drawing terrain. This material
 // is never used for drawing, but terrain tiles use CloneMaterial()
 // to get independent copies.

@@ -1,6 +1,12 @@
 var InitTerrainTileType = function(medea) {
 	// Leaf that actually draws a terrain tile (of any power-of-two size)
 	// Could be part of TerrainQuadTreeNode, but factored out to keep things easy.
+	//
+	// At this point the fact that the terrain is transformed to be a sphere-part
+	// is not of relevance except that the vertex shader used for drawing the
+	// tile does said transformation.
+	//
+	// All other hacks
 	var TerrainTile = medea.Node.extend({
 		x : 0,
 		y : 0,
@@ -25,7 +31,8 @@ var InitTerrainTileType = function(medea) {
 			// that has its own set of constants but shares other
 			// rendering state. This will minimize the number of state
 			// changes required to draw multiple tiles.
-			var material = medea.CloneMaterial(get_prototype_terrain_material(climate), 
+			var material = medea.CloneMaterial(get_prototype_terrain_material(climate
+				), 
 				medea.MATERIAL_CLONE_COPY_CONSTANTS | medea.MATERIAL_CLONE_SHARE_STATE);
 
 			// Create a clone of the mesh prototype and assign the cloned
