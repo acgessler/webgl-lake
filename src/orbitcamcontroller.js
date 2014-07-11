@@ -1,11 +1,10 @@
-var GetOrbitCamControllerType = function(medea) {
-
-	var ORBIT_CAM_BLEND_TO_FPS_START_HEIGHT = 100;
-	var FPS_HEIGHT_OVER_GROUND = 10;
+var GetOrbitCamControllerType = function(medea, app) {
 
 	// Slight variation of medea's stock OrbitCamController, adding the smooth
 	// interpolation between Orbit and FPS view as the camera comes close to
 	// the planet surface.
+	//
+	// In the context of the demo, this is a singleton.
 	var OrbitCamController = medea.OrbitCamController.extend({
 
 		terrain_node : null,
@@ -23,6 +22,11 @@ var GetOrbitCamControllerType = function(medea) {
 				if (this.dirty_trafo === false) {
 					return;
 				}
+
+				if (!this.terrain_node) {
+					alert('terrain node not set');
+				}
+
 				var	vo 			= view_with_offset
 				,	dist 		= this.camera_distance
 				,	phi 		= this.phi
@@ -47,38 +51,38 @@ var GetOrbitCamControllerType = function(medea) {
 				vup[1] = 1;
 				vup[2] = 0;
 
+				// Transition between orbit (0.0) and ground view (1.0)
+				var f = 0.0;
 
 				// CHANGE WITH RESPECT TO THE NORMAL, medea-library OrbitCamController:
 				// Close to the ground, pick the eye vector as a tangent to the planet
 				// surface and up as a normal.
-				if (this.terrain_node) {
-					var terrain_height = this.terrain_node.GetHeightAt(veye);
-					var threshold = RADIUS + terrain_height + FPS_HEIGHT_OVER_GROUND;
-					if (dist < threshold) {
-						dist = threshold;
-						vo[12] = veye[0] * dist;
-						vo[13] = veye[1] * dist;
-						vo[14] = veye[2] * dist;
-					}
-					threshold += ORBIT_CAM_BLEND_TO_FPS_START_HEIGHT;
-					if (dist < threshold) {
-						var f = saturate((threshold - dist) / ORBIT_CAM_BLEND_TO_FPS_START_HEIGHT);
-						vec3.lerp(vup, veye, f);
-						vec3.normalize(vup);
+				var terrain_height = this.terrain_node.GetHeightAt(veye);
+				var threshold = RADIUS + terrain_height + FPS_HEIGHT_OVER_GROUND;
+				if (dist < threshold) {
+					vo[12] = veye[0] * dist;
+					vo[13] = veye[1] * dist;
+					vo[14] = veye[2] * dist;
+				}
+				threshold += ORBIT_CAM_BLEND_TO_FPS_START_HEIGHT;
+				if (dist < threshold) {
+					f = saturate((threshold - dist) / ORBIT_CAM_BLEND_TO_FPS_START_HEIGHT);
+					f = Math.sqrt(f);
+					vec3.lerp(vup, veye, f);
+					vec3.normalize(vup);
 
-						// Pick a vector perpendicular to the current eye vector
-						// To avoid a discontinuity during interpolation.
-						//
-						// Project it onto the sphere surface
-						// TODO: use world camera up
-						var vground = [1 + veye[0], veye[1], 1 + veye[2]];
-						vec3.normalize(vground);
-						vec3.subtract(vground, veye, vground);
-						vec3.normalize(vground);
+					// Pick a vector perpendicular to the current eye vector
+					// To avoid a discontinuity during interpolation.
+					//
+					// Project it onto the sphere surface
+					// TODO: use world camera up
+					var vground = [1 + veye[0], veye[1], 1 + veye[2]];
+					vec3.normalize(vground);
+					vec3.subtract(vground, veye, vground);
+					vec3.normalize(vground);
 
-						vec3.lerp(veye, vground, f);
-						vec3.normalize(veye);
-					}
+					vec3.lerp(veye, vground, f);
+					vec3.normalize(veye);
 				}
 
 				// z-axis
@@ -106,9 +110,15 @@ var GetOrbitCamControllerType = function(medea) {
 				vo[7]  = 0;
 
 				if(this.pan_enable) {
-					mat4.translate(vo, this.pan_vector, vo);
+					mat4.translate(vo, vec3.scale(this.pan_vector, (1-f), vec3.create()), vo);
 				}
 
+				if (f > 0.99) {
+					app.SwitchToFpsView(vo);
+				}
+				else {
+					app._SetOrbitGroundDistance(dist - terrain_height - RADIUS);
+				}
 				node.LocalTransform(vo);
 				this.dirty_trafo = false;
 			};

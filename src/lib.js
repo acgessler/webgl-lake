@@ -87,10 +87,6 @@ var get_prototype_terrain_material = (function() {
 	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants, undefined, defines);
 	mat.SetIgnoreUniformVarLocationNotFound();
 	terrain_materials[key] = mat;
-
-	var state = mat.Pass(0).State();
-	state.stencil_func = ['equal', 0x1, 0xff];
-	state.stencil_test = true;
 	return mat;
 	};
 })();

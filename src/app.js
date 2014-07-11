@@ -92,6 +92,74 @@ function on_init_context(resources) {
 	viewport.ClearColor([0.0,0.0,0.0]);
 	
 	root = medea.RootNode();
+
+	var fps_view = false;
+	var orbit_ground_distance = 0;
+
+	var app = {
+
+		GetTerrainNode : function() {
+			return terrain_root;
+		},
+
+		// Get the medea.Image (lockable, all data in RAM) that holds
+		// height data for a particular heightmap index.
+		//
+		// cube_face_idx_to_heightmap_idx() maps from cube faces to
+		// heightmap indices.
+		GetHeightMap : function(heightmap_idx) {
+			return resources['heightmap_' + heightmap_idx];
+		},
+
+		// Gets the tree map corresponding to a single heightmap index.
+		GetTreeMap : function(heightmap_idx) {
+			return resources['treemap_' + heightmap_idx];
+		},
+
+		// Gets the estimated distance from the camera to the ground
+		GetGroundDistance : function() {
+			if (fps_view) {
+				return FPS_HEIGHT_OVER_GROUND;
+			}
+			return orbit_ground_distance;
+		},
+
+		// Get the world space position of the current active camera
+		GetCameraPosition : function() {
+			if (fps_view) {
+				return cam_fps.GetWorldPos();
+			}
+			return cam.GetWorldPos();
+		},
+
+		GetCameraPositionRelativeToGround : function() {
+			var vpos = app.GetCameraPosition();
+			var vlen = vec3.length(vpos); 
+			vec3.scale(vpos, (app.GetGroundDistance() + RADIUS) / vlen);
+			return vpos;
+		},
+
+		IsFpsView : function(trafo) {
+			return fps_view;
+		},
+
+		SwitchToFpsView : function(trafo) {
+			if (fps_view) {
+				return;
+			}
+			fps_view = true;
+			cam_fps.LocalTransform(trafo);
+			viewport.Camera(cam_fps);
+
+			console.log("Switching to FPS view");
+		},
+
+		/////////////////////////////////////////////////////////////////////////
+
+		_SetOrbitGroundDistance : function(d) {
+			orbit_ground_distance = d;
+		},
+	};
 	
 
 /*
@@ -113,22 +181,21 @@ function on_init_context(resources) {
 
 	
 
-	var AtmosphereNode = InitAtmosphereNodeType(medea);
+	var AtmosphereNode = InitAtmosphereNodeType(medea, app);
 	
-	var SphericalTerrainNode = InitSphericalTerrainType(medea, resources);
+	var SphericalTerrainNode = InitSphericalTerrainType(medea, app);
 	var terrain_root = new SphericalTerrainNode();
 	root.AddChild(terrain_root);
 
 	var dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
 	root.AddChild(dome_node);
 
-	
 	// And the orbit camera 
 	var cam = medea.CreateCameraNode("Orbit");
 	cam.ZNear(1);
 	cam.ZFar(10000);
 
-	var OrbitCamController = GetOrbitCamControllerType(medea);
+	var OrbitCamController = GetOrbitCamControllerType(medea, app);
 	var cc = new  OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
 	cc.TerrainNode(terrain_root);
 	cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
@@ -140,16 +207,13 @@ function on_init_context(resources) {
 
     cam.AddEntity(cc);
     cam.Translate(vec3.scale([RADIUS, RADIUS, RADIUS], 1.8));
+    root.AddChild(cam);
 
-	// Add the FPS camera
+	// Add the ground-level FPS camera
 	var cam_fps = medea.CreateCameraNode("FPS");
 	cam_fps.ZNear(1);
 	cam_fps.ZFar(10000);
-
-	root.AddChild(cam);
 	root.AddChild(cam_fps);
-
-	viewport.Camera(cam);
 
     var SphereFpsCamController = GetSphereFpsCamControllerType(medea);
     var cc_fps = new SphereFpsCamController();
@@ -158,6 +222,8 @@ function on_init_context(resources) {
 
     cam_fps.AddEntity(cc_fps);
    	cc_fps.PlaceNodeAt(cam_fps, [0.5, 1.0, 0.3]);
+
+   	// Initially activate the Orbit camera
     viewport.Camera(cam);
 
 	var light = medea.CreateNode();
@@ -204,6 +270,23 @@ function on_init_context(resources) {
 		on_tick(dtime);
 
 		var SUN_MOVE_SPEED = 0.2;
+
+		// FPS/Ground view has a fixed sub and z range
+		if (app.IsFpsView()) {
+			var up = cam_fps.GetWorldYAxis();
+			var right = cam_fps.GetWorldXAxis();
+			vec3.lerp(up, right, 0.4);
+			vec3.normalize(up);
+			vec3.negate(up);
+			light_entity.Direction(up);
+			if (sun) {
+				sun.LocalPos(vec3.scale(up, SUN_DISTANCE));
+			}
+			
+			return true;
+		}
+		
+		// Orbit view has moving sun
 		if(input_handler.ConsumeKeyDown(medea.KeyCode.ENTER)) {
 			set_time_of_day((time_of_day + 0.5) % 24.0);
         }

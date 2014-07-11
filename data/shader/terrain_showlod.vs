@@ -13,7 +13,6 @@
 #include <url:/data/shader/constants_shared.vsh>
 
 uniform vec3 CAM_POS;
-uniform float sq_base_height;
 
 void main()
 {
@@ -23,22 +22,40 @@ void main()
 	// First map to world space as usual, this part is linear
 	vec3 world_position = ModelToWorldSpace(position);
 
+	// copypaste from terrain.vs, should all be factored out one day.
+
+	///////////////////////////////////////////////////////////////////////////
+	// Calculate spherical terrain height at this point
+
 	// Input world_position is on the surface of the unit cube,
-	// therefore normalizing yields a non-linear map to unit sphere.
+	// normalizing yields a non-linear map to unit sphere.
 	vec3 unit_sphere_pos = normalize(world_position);
-	vec3 sphere_world_position = unit_sphere_pos * kRADIUS;
-	vec3 shift = sphere_world_position - world_position;
-	vec3 world_eye = CAM_POS - sphere_world_position;
 
-	float height = ComputeHeightAt(position, dot(world_eye, world_eye) - sq_base_height, uv);
-	position.y = height * 255.0 * kTERRAIN_HEIGHT_SCALE;
-	vec3 sphere_world_position_with_height = sphere_world_position +
-		unit_sphere_pos * position.y;
+	// Approximate the final position of the terrain point by using
+	// the terrain height under the camera
+	float height_approx = kRADIUS + terrain_height_under_cam;
+	vec3 sphere_world_position_with_height_approx = unit_sphere_pos *
+		height_approx;
 
-	// Forward final position and computed UV to PS
+	// From this, derive an approximate world eye vector.
+	//
+	// The square length of the world eye vector is used to pick the LOD of
+	// the terrain at this point, which then allows us to compute the exact
+	// height.
+	vec3 world_eye_approx = CAM_POS - sphere_world_position_with_height_approx;
+	float cam_distance_approx_sq = dot(world_eye_approx, world_eye_approx);
+
+	float height_unscaled = ComputeHeightAt(position, cam_distance_approx_sq, uv);
+	float height = kRADIUS + height_unscaled * kHEIGHTMAP_PIXEL_TO_TERRAIN_HEIGHT;
+
+	// Derive the exact terrain position from the exact height
+	vec3 sphere_world_position_with_height = sphere_world_position_with_height_approx *
+		(height / height_approx);
+
+	///////////////////////////////////////////////////////////////////////////
+
 	PassClipPosition(WorldToClipSpace(sphere_world_position_with_height));
-
-	float lod = CalcLOD(dot(world_eye, world_eye) - sq_base_height);
+	float lod = CalcLOD(cam_distance_approx_sq);
 	PassVec2(lod, vec2(floor(lod) / 8.0, lod - lod_range.x));
 }
 

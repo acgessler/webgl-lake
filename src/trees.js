@@ -1,7 +1,20 @@
 
-var InitTreeTileType = function(medea, resources) {
+var InitTreeTileType = function(medea, app) {
 
-	function compute_tree_mesh(medea, terrain_image, tree_image) {
+	var compute_tree_mesh = (function() {
+		var tree_meshes = {};
+		return function(cube_face_idx) {
+
+		var heightmap_idx = cube_face_idx_to_heightmap_idx(cube_face_idx);
+
+		var key = heightmap_idx;
+		if (tree_meshes[key]) {
+			return tree_meshes[key];
+		}
+
+		var terrain_image = app.GetHeightMap(heightmap_idx);
+		var tree_image = app.GetTreeMap(heightmap_idx);
+
 		var data = tree_image.GetData(), w = tree_image.GetWidth(), h = tree_image.GetHeight();
 		var height_data = terrain_image.GetData();
 
@@ -20,7 +33,7 @@ var InitTreeTileType = function(medea, resources) {
 			}
 		}
 
-		console.log('Totally ' + tree_count + ' trees');
+		console.log('Totally ' + tree_count + ' trees ' + ' for heightmap index ' + heightmap_idx);
 
 		// Emit full vertices and do not use an index buffer. This
 		// looses us the vertex cache effect, making vertex processing
@@ -94,11 +107,11 @@ var InitTreeTileType = function(medea, resources) {
 		var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
 		mesh.Material().Pass(0).SetDefaultAlphaBlending();
 		mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
+		tree_meshes[key] = mesh;
 		return mesh;
-		}
+		};
+	})();
 
-
-	//var tree_mesh = compute_tree_mesh(medea, terrain_image, tree_image);
 
 	var TreeTile = medea.Node.extend({
 		x : 0,
@@ -107,14 +120,31 @@ var InitTreeTileType = function(medea, resources) {
 
 		mesh : null,
 
-		init : function(x, y, w) {
+		init : function(x, y, w, cube_face_idx) {
 			this._super();
 			this.x = x | 0;
 			this.y = y | 0;
 			this.w = w === undefined ? 1 : w;
 			
-			this.AddEntity(tree_mesh);
+			var mesh = this.mesh = compute_tree_mesh(cube_face_idx);
+			this.AddEntity(mesh);
 			this.SetStaticBB(medea.BB_INFINITE);
+		},
+
+		Render : function(camera, rqmanager) {
+			this._super();
+
+			var state = this.mesh.Material().Pass(0).State();
+
+			// In FPS/ground mode, no stencil clipping takes place
+			if (app.IsFpsView()) {
+				state.stencil_test = false;
+			}
+			// In Orbit mode, all terrain is clipped against the atmosphere contour
+			else {
+				state.stencil_func = ['equal', 0x1, 0xff];
+				state.stencil_test = true;
+			}
 		},
 	});
 

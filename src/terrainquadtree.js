@@ -1,6 +1,6 @@
 
 
-var InitTerrainQuadTreeType = function(medea, resources) {
+var InitTerrainQuadTreeType = function(medea, app) {
 	// Compute the min and max heights of each terrain tile on each LOD level
 	// for the given cube face.
 	//
@@ -24,7 +24,7 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 			return bounding_boxes[key];
 		}
 
-		var terrain_image = resources['heightmap_' + heightmap_idx];
+		var terrain_image = app.GetHeightMap(heightmap_idx);
 
 		var data = terrain_image.GetData();
 		var tile_size = TILE_SIZE;
@@ -44,7 +44,7 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 					var ybase = (y * tile_size + yy) * TERRAIN_PLANE_WIDTH;
 					for (var xx = 0; xx < tile_size; ++xx) {
 						var src_idx = (ybase + x * tile_size + xx) * 4;
-						var height = data[src_idx];
+						var height = data[src_idx] * TERRAIN_HEIGHT_SCALE;
 
 						vmin = Math.min(vmin, height);
 						vmax = Math.max(vmax, height);
@@ -89,8 +89,8 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 
 
 	var WaterTile = InitWaterTileType(medea);
-	var TerrainTile = InitTerrainTileType(medea);
-	var TreeTile = InitTreeTileType(medea, resources);
+	var TerrainTile = InitTerrainTileType(medea, app);
+	var TreeTile = InitTreeTileType(medea, app);
 
 
 	// Adaptive Quad-Tree node to dynamically subdivide the terrain.
@@ -145,7 +145,7 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 
 			if (this.w === TILE_COUNT) {
 				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h, cube_face_idx));
-				//this.AddChild(new TreeTile(this.x, this.y, this.w));
+				this.AddChild(new TreeTile(this.x, this.y, this.w, cube_face_idx));
 			}
 
 			this.node_lod_level = log2(this.w);
@@ -153,9 +153,10 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 			// There are two reasons why we need to override medea's
 			// automatic BB calculation:
 			//
-			// - quadtree nodes are added lazily, so initially everything is
-			//   empty. Nothing would get drawn, and the quadtree would
-			//   therefore not get further subdivided.
+			// - Quadtree nodes are added lazily, so initially only the root
+			//   node without any mesh leaf exists. With an empty initial BB, nothing
+			//   would ever be drawn, and the quadtree would therefore not get
+			//   further subdivided.
 			// - The transformation to spherical shape is applied outside of
 			//   medea's transformation system (since the transformation
 			//   is non-linear), so automatic BB calculation would not take
@@ -173,7 +174,7 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 			x = Math.floor(x);
 			y = Math.floor(y);
 
-			var image = resources['heightmap_' + cube_face_idx_to_heightmap_idx(this.cube_face_idx)];
+			var image = app.GetHeightMap(cube_face_idx_to_heightmap_idx(this.cube_face_idx));
 			var data = image.GetData();
 			return data[(y * image.GetWidth() + x) * 4] * TERRAIN_HEIGHT_SCALE;
 		},
@@ -299,7 +300,7 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 			// If the node is partially hidden, subdivide down until a
 			// threshold LOD is reached (this is a tradeoff between
 			// overdraw and an increased batch count).
-			var PVS_THRESHOLD_LOD = 5;
+			var PVS_THRESHOLD_LOD = 4;
 			if (can_subdivide && visibility_status == medea.VISIBLE_PARTIAL &&
 				this.node_lod_level >= PVS_THRESHOLD_LOD) {
 				this._Subdivide();
@@ -323,15 +324,37 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 				return;
 			}
 
+			// Determine the LOD bracket for this node.
+			//
+			// It is crucial that this exactly replicates the algorithm used in
+			// terrain.vs or there WILL be cracks.
+			//
+			// To be able to render at this level of the tree, the difference in LOD
+			// between any two corners may be at most 1 or discontinuities will occur.
+			var world = this.GetGlobalTransform();
+			var cam_height = app.GetTerrainNode().GetHeightAt(cam_pos);
+
 			var clod_min, clod_max;
-			var scratch_vec = vec3.create();
-			for (var i = 0; i < 8; ++i) {
-				var corner = [
-					i & 1 ? vmin[0] : vmax[0],
-					i & 2 ? vmin[1] : vmax[1],
-					i & 4 ? vmin[2] : vmax[2],
-				];
-				var delta = vec3.subtract(cam_pos, corner, scratch_vec);
+			var corner = vec3.create();
+
+			var xs = this.x * TILE_SIZE;
+			var ys = this.y * TILE_SIZE;
+			var xe = (this.x + this.w) * TILE_SIZE;
+			var ye = (this.y + this.w) * TILE_SIZE;
+
+			for (var i = 0; i < 4; ++i) {
+				corner[0] = (i & 1 ? xs : xe) + TERRAIN_PLANE_OFFSET;
+				corner[1] = RADIUS;
+				corner[2] = (i & 2 ? ys : ye) + TERRAIN_PLANE_OFFSET;
+				vec3.normalize(corner);
+				vec3.scale(corner, RADIUS + cam_height);
+
+				corner[0] -= TERRAIN_PLANE_OFFSET;
+				corner[1] -= RADIUS;
+				corner[2] -= TERRAIN_PLANE_OFFSET;
+				mat4.multiplyVec3(world, corner, corner);
+				
+				var delta = vec3.subtract(cam_pos, corner, corner);
 				var clod = calc_clod(vec3.dot(delta, delta));
 				if (i === 0 || clod < clod_min) {
 					clod_min = clod;
@@ -340,15 +363,17 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 					clod_max = clod;
 				}
 			}
-	
+			
+			//clod_max = Math.ceil(clod_max);
+			//clod_min = 0; //Math.floor(clod_min);
+
 			var clod_delta = clod_max - clod_min;
-			var can_satisfy_lod = clod_min - Math.floor(log2(this.w)) >= 0;
-			if ((clod_delta >= 1.0 || !can_satisfy_lod) && can_subdivide) {
+			var can_satisfy_lod = clod_min - this.node_lod_level >= 0;
+			if ((clod_delta > 1.0 || !can_satisfy_lod) && can_subdivide) {
 				this._Subdivide();
 			}
 			else {
-				this._RenderAsSingleTile(clod_min,
-					(this.local_bb[0][1] + this.local_bb[1][1]) * 0.5);
+				this._RenderAsSingleTile(clod_min);
 			}
 		},
 
@@ -363,7 +388,7 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 				scratch_src[3] = 0;
 				var cn = vec3.normalize(mat4.multiplyVec4(world, scratch_src, scratch_src));
 				var d = vec3.dot(cn, norm);
-				if (d < 0) {
+				if (d < 0.0) {
 					++count_negative;
 				}
 			}
@@ -407,9 +432,9 @@ var InitTerrainQuadTreeType = function(medea, resources) {
 			}
 		},
 
-		_RenderAsSingleTile : function(clod_min, tile_y_mean) {
+		_RenderAsSingleTile : function(clod_min) {
 			if (this.draw_tile === null) {
-				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back, tile_y_mean, this.cube_face_idx);
+				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back, this.cube_face_idx);
 				this.AddChild(this.draw_tile);
 			}
 

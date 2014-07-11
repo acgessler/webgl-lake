@@ -24,3 +24,12 @@ clouds.jpg
 
 Public domain from
 http://www.shadedrelief.com/natural3/pages/use.html
+
+(Heavily edited)
+
+midmorning.png
+====================
+
+Taken from http://www.tutorialsforblender3d.com/Textures/Skys/Sky_Dome_1.html
+
+"Sky Textures were created with Terragen™ Classic for Windows.  According to their license, the textures are free for personal non-commercial use."

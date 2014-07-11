@@ -1,18 +1,21 @@
-var InitAtmosphereNodeType = function(medea) {
+var InitAtmosphereNodeType = function(medea, app) {
 	// Draws the atmosphere with scattering and cloud layer from space as well
 	// as a static, skydome-based version on ground level.
 	var AtmosphereNode = medea.Node.extend({
 
 		camera : null,
 
+		// Orbit
 		mat_sky : null,
 		mat_ground : null,
 		mesh_ground : null,
 		mesh_sky : null,
 		node_ground : null,
 		node_sky : null,
-
 		node_clouds : null,
+
+		// Ground
+		node_skydome : null,
 
 		init : function() {
 			this._super();
@@ -33,7 +36,7 @@ var InitAtmosphereNodeType = function(medea) {
 				}
 			);
 
-			var mesh_ground = this.mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 64, 6);
+			var mesh_ground = this.mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 46, 6);
 			var mesh_sky = this.mesh_sky = medea.CloneMesh(mesh_ground, mat_sky);
 			mesh_ground.RenderQueue(medea.RENDERQUEUE_LAST);
 			mesh_sky.RenderQueue(medea.RENDERQUEUE_LAST);
@@ -69,6 +72,7 @@ var InitAtmosphereNodeType = function(medea) {
 			node_sky.Scale(OUTER_RADIUS);
 
 			this._SetupCloudLayer();
+			this._SetupGroundSkydome();
 		
 			// Prevent any culling on this node or its children
 			this.SetStaticBB(medea.BB_INFINITE);
@@ -78,29 +82,54 @@ var InitAtmosphereNodeType = function(medea) {
 			this._super();
 			this.camera = camera;
 
+			// In FPS/ground mode switch to the static skydome
+			if (app.IsFpsView()) {
+				this.node_ground.Enabled(false);
+				this.node_sky.Enabled(false);
+				this.node_clouds.Enabled(false);
+				this.node_skydome.Enabled(true);
+
+				// Position the skydome in sync with the ground
+				var pos = camera.GetWorldPos();
+				vec3.normalize(pos);
+
+				// TODO: handle degenerate points
+				var right = [1, 0, 0];
+				var eye = [0, 0, 1];
+
+				vec3.cross(pos, eye, right);
+				vec3.cross(right, pos, eye);
+
+				this.LocalXAxis(right);
+				this.LocalYAxis(pos);
+				this.LocalZAxis(eye);
+				return;
+			}
+
 			// Position the half-sphere according to the camera mode
 			// (orbit mode is 90deg rotated wrt FPS mode)
 			//
-			// Also set material accordingly. Orbit camera is always treated
-			// as "from space" even though the Orbit camera technically enters
-			// the atmosphere.
-			if (camera.Name().indexOf("Orbit") !== -1) {
-				this.LocalXAxis(camera.GetWorldXAxis());
-				this.LocalYAxis(camera.GetWorldZAxis());
-				this.LocalZAxis(vec3.negate(camera.GetWorldYAxis()));
+			// Also update the material according to whether the camera
+			// is inside, or outside the atmosphere.
+			this.LocalXAxis(camera.GetWorldXAxis());
+			this.LocalYAxis(camera.GetWorldZAxis());
+			this.LocalZAxis(vec3.negate(camera.GetWorldYAxis()));
 
-				this.mesh_ground.Material(this.mat_ground);
-				this.mesh_sky.Material(this.mat_sky_from_ground);
+			this.mesh_ground.Material(this.mat_ground);
+			this.mesh_sky.Material(this.mat_sky_from_ground);
 
-				this.node_ground.Enabled(true);
-				this.node_sky.Enabled(true);
-			}
-			else {
-				this.node_ground.Enabled(false);
-				this.node_sky.Enabled(false);
-			}
+			this.node_ground.Enabled(true);
+			this.node_sky.Enabled(true);
+			this.node_clouds.Enabled(true);
+			this.node_skydome.Enabled(false);
 		},
 
+		_SetupGroundSkydome : function() {
+			// Create a new dome mesh with a significantly lower polycount
+			var nd = this.node_skydome = medea.CreateSkydomeNode("url:data/textures/midmorning.png", 0.4, 16);
+			nd.Scale(RADIUS_GROUND);
+			this.AddChild(nd);
+		},
 
 		_SetupCloudLayer : function() {
 			var shader = 'url:data/shader/clouds';

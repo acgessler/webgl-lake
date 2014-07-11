@@ -2,8 +2,8 @@
 #define INCLUDED_TERRAIN_SHARED
 
 // TODO: HW filtering may not work everywhere (investigate!). Also,
-// it is seemingly more shaky than regular LOD which makes me wonder
-// where the HW's approximation lies.
+// it is (on my HD5800) much more shaky than regular LOD which makes me wonder
+// whether the HW linear filter is implemented in less than fp32 precision.
 //#define USE_HW_FILTERING
 
 #include <url:/data/shader/constants_shared.vsh>
@@ -15,12 +15,19 @@ uniform highp vec4 lod_range;
 uniform float inv_terrain_map_dim;
 uniform float lod_attenuation;
 
+// Scaled terrain height *under* the camera
+uniform float terrain_height_under_cam;
+
 
 const float kMIN_LOD = 0.0;
 const float kMAX_LOD = 8.0;
 
 const float kLOD_BASE_UNIT = 16.0;
 const float kSQ_LOD_BASE_UNIT = kLOD_BASE_UNIT * kLOD_BASE_UNIT;
+
+// Map from texel value in [0,1] to final, scaled terrain height
+const float kHEIGHTMAP_PIXEL_TO_TERRAIN_HEIGHT = 255.0 * kTERRAIN_HEIGHT_SCALE;
+
 
 vec2 TilePositionToTerrainUVCoordinates(vec2 tile_pos_xz) {
 	tile_pos_xz *= kINV_TILE_SIZE;

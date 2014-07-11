@@ -1,6 +1,6 @@
-var InitSphericalTerrainType = function(medea, resources) {
+var InitSphericalTerrainType = function(medea, app) {
 
-	var TerrainQuadTreeNode = InitTerrainQuadTreeType(medea, resources);
+	var TerrainQuadTreeNode = InitTerrainQuadTreeType(medea, app);
 
 	var axes = [
 		[1, 0, 0],
@@ -53,7 +53,7 @@ var InitSphericalTerrainType = function(medea, resources) {
 					// creating the terrain image data though.
 					plane_anchor.Scale([-1, -1, 1]);
 				}
-				plane_anchor.Translate([0, TERRAIN_PLANE_WIDTH / 2, 0]);
+				plane_anchor.Translate([0, RADIUS, 0]);
 				plane_anchor.AddChild(plane);
 				this.AddChild(plane_anchor);
 			}
@@ -72,7 +72,7 @@ var InitSphericalTerrainType = function(medea, resources) {
 			state.stencil_mask = 0xff;
 			state.stencil_test = true;
 
-			var mesh_mask = medea.CreateDomeMesh(mat_mask, 0.0, 32, 0);
+			var mesh_mask = medea.CreateDomeMesh(mat_mask, 0.0, 16, 0);
 			mesh_mask.RenderQueue(medea.RENDERQUEUE_FIRST);
 
 			var node_mask = this.node_mask = this.AddChild();
@@ -86,9 +86,15 @@ var InitSphericalTerrainType = function(medea, resources) {
 			
 			var node_mask = this.node_mask;
 
+			// FPS/Ground view: no stencil mask required
+			if (app.IsFpsView()) {
+				this.node_mask.Enabled(false);
+			}
+			// Orbit view:
 			// Position the half-sphere used for stencil masking to
 			// face towards the camera.
-			if (camera.Name().indexOf("Orbit") !== -1) {
+			else {
+				this.node_mask.Enabled(true);
 				node_mask.LocalXAxis(camera.GetWorldXAxis());
 				node_mask.LocalYAxis(camera.GetWorldZAxis());
 				node_mask.LocalZAxis(vec3.negate(camera.GetWorldYAxis()));
