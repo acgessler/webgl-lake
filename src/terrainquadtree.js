@@ -87,6 +87,12 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 	};
 
+	var world_offset_without_rotation = vec3.create([
+		TERRAIN_PLANE_OFFSET,
+		RADIUS,
+		TERRAIN_PLANE_OFFSET
+	]);
+
 
 	var WaterTile = InitWaterTileType(medea);
 	var TerrainTile = InitTerrainTileType(medea, app);
@@ -206,12 +212,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			// While ii) is invariant to the sphere transformation, i) is not.
 			// Therefore we need to apply i) to calculate the BB and undo its
 			// effect later.
-			var world_offset_without_rotation = vec3.create([
-				TERRAIN_PLANE_OFFSET,
-				RADIUS,
-				TERRAIN_PLANE_OFFSET
-			]);
-
 			this.local_bb = medea.CreateBB(a, b);
 			
 			// Now transform this AABB by the sphere shape
@@ -232,16 +232,12 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			// First consider the four inner corner points
 			for (var i = 0; i < 4; ++i) {
 				scratch[0] = ((i & 0x1) ? b : a)[0];
-				scratch[1] = 0;
+				scratch[1] = a[1];
 				scratch[2] = ((i & 0x2) ? b : a)[2];
-				vec3.add(scratch, world_offset_without_rotation);
-				vec3.normalize(scratch);
 
-				var height = a[1] + RADIUS;
-				vec3.scale(scratch, height);
+				this._ToSpherePoint(scratch);
 
 				vec3.normalize(scratch, this.corner_normals[i]);
-
 				for (var j = 0; j < 3; ++j) {
 					vmin[j] = Math.min(vmin[j], scratch[j]);
 					vmax[j] = Math.max(vmax[j], scratch[j]);
@@ -269,6 +265,21 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			vec3.subtract(vmin, world_offset_without_rotation);
 			vec3.subtract(vmax, world_offset_without_rotation);
 			this.SetStaticBB(medea.CreateBB(vmin, vmax));
+		},
+
+		// Given a point local to the flat terrain, make it a point on
+		// the sphere surface.
+		//
+		// -TERRAIN_PLANE_OFFSET, 0, -TERRAIN_PLANE_OFFSET marks the
+		// center of the flat terrain.
+		_ToSpherePoint : function(vec, dest) {
+			var height = vec[1];
+			vec[1] = 0;
+			vec3.add(vec, world_offset_without_rotation);
+			vec3.normalize(vec);
+
+			var full_height = height + RADIUS;
+			return vec3.scale(vec, full_height, dest);
 		},
 
 		// This is a Render() operation (not Update) since the terrain
@@ -331,8 +342,9 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			//
 			// To be able to render at this level of the tree, the difference in LOD
 			// between any two corners may be at most 1 or discontinuities will occur.
-			var world = this.GetGlobalTransform();
+			var world = this.GetInverseGlobalTransform();
 			var cam_height = app.GetTerrainNode().GetHeightAt(cam_pos);
+			var cam_pos_local = mat4.multiplyVec3(world, cam_pos, vec3.create());
 
 			var clod_min, clod_max;
 			var corner = vec3.create();
@@ -343,18 +355,14 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			var ye = (this.y + this.w) * TILE_SIZE;
 
 			for (var i = 0; i < 4; ++i) {
-				corner[0] = (i & 1 ? xs : xe) + TERRAIN_PLANE_OFFSET;
-				corner[1] = RADIUS;
-				corner[2] = (i & 2 ? ys : ye) + TERRAIN_PLANE_OFFSET;
-				vec3.normalize(corner);
-				vec3.scale(corner, RADIUS + cam_height);
+				corner[0] = (i & 1 ? xs : xe);
+				corner[1] = cam_height;
+				corner[2] = (i & 2 ? ys : ye);
 
-				corner[0] -= TERRAIN_PLANE_OFFSET;
-				corner[1] -= RADIUS;
-				corner[2] -= TERRAIN_PLANE_OFFSET;
-				mat4.multiplyVec3(world, corner, corner);
+				corner = this._ToSpherePoint(corner);
+				vec3.subtract(corner, world_offset_without_rotation, corner);
 				
-				var delta = vec3.subtract(cam_pos, corner, corner);
+				var delta = vec3.subtract(cam_pos_local, corner, corner);
 				var clod = calc_clod(vec3.dot(delta, delta));
 				if (i === 0 || clod < clod_min) {
 					clod_min = clod;
