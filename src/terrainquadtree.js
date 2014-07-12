@@ -325,12 +325,17 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 
 			// We always sub-divide if the player is in the node
-			if (can_subdivide && 
-				cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
+			if (cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
 				cam_pos[1] >= vmin[1] && cam_pos[1] < vmax[1] &&
 				cam_pos[2] >= vmin[2] && cam_pos[2] < vmax[2]) {
-				this._SetChildrenEnabled(true);
-				this._Subdivide();
+
+				this._SetChildrenEnabled(can_subdivide);
+				if (can_subdivide) {
+					this._Subdivide();
+				}
+				else {
+					this._RenderAsSingleTile(0);
+				}
 				return;
 			}
 
