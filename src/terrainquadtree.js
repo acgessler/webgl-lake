@@ -176,11 +176,16 @@ var InitTerrainQuadTreeType = function(medea, app) {
 		GetHeightAt : function(x, y) {
 			// Any level of the tree can respond to a query for any position
 			// as long as all the terrain fits in a single texture. If this
-			// change, this would need to recurse into the tree.
+			// changed, this would need to recurse into the tree to find
+			// someone with high-resolution imaginery.
+			var image = app.GetHeightMap(cube_face_idx_to_heightmap_idx(this.cube_face_idx));
+			var width = image.GetWidth();
 			x0 = Math.floor(x);
 			y0 = Math.floor(y);
-			x1 = x0 + 1;
-			y1 = y0 + 1;
+
+			// Assume terrain wrapping
+			x1 = (x0 + 1) % width;
+			y1 = (y0 + 1) % width;
 
 			// Perform a bilinear interpolation of the source texture
 			// Note that this is different from what GetSmoothedHeightAt() does:
@@ -188,10 +193,8 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			// to global world resolution.
 			var fx = x - x0;
 			var fy = y - y0;
-
-			var image = app.GetHeightMap(cube_face_idx_to_heightmap_idx(this.cube_face_idx));
+			
 			var data = image.GetData();
-			var width = image.GetWidth();
 			var height_at = function(xx, yy) {
 				return data[(yy * width + xx) * 4];
 			};	
@@ -269,13 +272,10 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			var sx = saturate((16 - this.x) / this.w); 
 			var sy = saturate((16 - this.y) / this.w); 
 			scratch[0] = a[0] + (b[0]-a[0]) * sx;
-			scratch[1] = 0;
+			scratch[1] = b[1];
 			scratch[2] = a[2] + (b[2]-a[2]) * sy;
-			vec3.add(scratch, world_offset_without_rotation);
-			vec3.normalize(scratch);
 
-			var height = b[1] + RADIUS;
-			vec3.scale(scratch, height);
+			this._ToSpherePoint(scratch);
 
 			for (var j = 0; j < 3; ++j) {
 				vmin[j] = Math.min(vmin[j], scratch[j]);

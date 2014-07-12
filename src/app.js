@@ -102,7 +102,7 @@ function on_init_context(resources) {
 		var last_frame = -1;
 		var value = null;
 		return function() {
-			var frame = medea.GetStatistics().frame_count;
+			var frame = medea.GetStatistics().count_frames;
 			if (last_frame != frame) {
 				last_frame = frame;
 				value = f();
@@ -161,6 +161,11 @@ function on_init_context(resources) {
 		// along the camera's UP axis)
 		GetTerrainHeightUnderCamera : CachePerFrame(function() {
 			return app.GetTerrainNode().GetHeightAt(app.GetCameraPosition());
+		}),
+
+		// Get a cubically smoothed terrain height value
+		GetSmoothedTerrainHeightUnderCamera : CachePerFrame(function() {
+			return app.GetTerrainNode().GetSmoothedHeightAt(app.GetCameraPosition());
 		}),
 
 
@@ -240,7 +245,7 @@ function on_init_context(resources) {
 	cam_fps.ZFar(10000);
 	root.AddChild(cam_fps);
 
-    var SphereFpsCamController = GetSphereFpsCamControllerType(medea);
+    var SphereFpsCamController = GetSphereFpsCamControllerType(medea, app);
     var cc_fps = new SphereFpsCamController();
     cc_fps.TerrainNode(terrain_root);
 	cc_fps.Enable();

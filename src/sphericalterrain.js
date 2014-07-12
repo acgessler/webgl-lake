@@ -102,35 +102,42 @@ var InitSphericalTerrainType = function(medea, app) {
 			}
 		},
 
-		// Get the height (measured from a sphere with r=RADIUS) of the terrain under
-		// any point.
-		//
-		// The returned height value includes the height scaling of the terrain.
-		GetHeightAt : function(v) {
-			var v_norm = vec3.normalize(v, vec3.create());
-
-			// Find out which side to look at
+		// Given an unit vector |v|, find the index of the cube face that
+		// corresponds to it.
+		FindFaceIndexForUnitVector : function(v) {
 			var children = this.children;
 			var max_i = 0;
 			var max_dot = 0;
 			for (var i = 0; i < 6; ++i) {
 				var axis = vec3.normalize(children[i].GetWorldYAxis());
-				var dot = vec3.dot(axis, v_norm);
+				var dot = vec3.dot(axis, v);
 				if (i === 0 || dot > max_dot) {
 					max_i = i;
 					max_dot = dot;
 				}	
 			}
+			return max_i;
+		},
+
+		// Get the height (measured from a sphere with r=RADIUS) of the terrain under
+		// any given point.
+		//
+		// The returned height value includes the height scaling of the terrain.
+		GetHeightAt : function(v) {
+			// TODO: this algorithm is not continuous across face boundaries
+			var v_norm = vec3.normalize(v, vec3.create());
+
+			// Find out which side to look at
+			var face_idx = this.FindFaceIndexForUnitVector(v_norm);
 
 			// Transform the vector into the local coordinate space
 			// of the correct face (which is from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
 			// on each axis, with 0,0,0 being the center of the plane)
-			var plane_anchor = children[max_i];
+			var plane_anchor = this.children[face_idx];
 			var trafo = plane_anchor.GetInverseGlobalTransform();
 
-			var v4 = [v_norm[0], v_norm[1], v_norm[2], 0.0];
-			mat4.multiplyVec4(trafo, v4);
-			vec3.normalize(v4, v_norm);
+			transform_vector(trafo, v_norm);
+			vec3.normalize(v_norm);
 
 			// Project from sphere coordinates onto the flat plane for the face
 			vec3.scale(v_norm, RADIUS / v_norm[1]);
@@ -141,6 +148,69 @@ var InitSphericalTerrainType = function(medea, app) {
 
 			return height;
 		},
+
+		// Get a gaussian smoothed height value for the terrain under a given point.
+		//
+		// The returned height value includes the height scaling of the terrain.
+		GetSmoothedHeightAt : (function() {
+
+			// Precalculate normalized coefficients for a 2D symmetric, gaussian kernel (rho=1, mean=0)
+			var KERNEL_WIDTH = 3;
+
+			var gauss_coeffs = new Array(KERNEL_WIDTH * KERNEL_WIDTH);
+
+			var range = Math.floor(KERNEL_WIDTH / 2);
+			var sum = 0.0;
+			for (var j = -range, cursor = 0; j <= range; ++j) {
+				for (var k = -range; k <= range; ++k, ++cursor) {
+					var coeff = Math.exp(- (j*j + k*k) / 2.0 );
+					sum += coeff;
+					gauss_coeffs[cursor] = coeff;
+				}
+			}
+
+			for (var i = gauss_coeffs.length - 1; i >= 0; --i) {
+				gauss_coeffs[i] /= sum;
+			}
+
+			return function(v) {
+
+				// TODO: this algorithm is not continuous across face boundaries
+				// as sampling is always restricted to one cube face.
+				var v_norm = vec3.normalize(v, vec3.create());
+
+				// Find out which side to look at
+				var face_idx = this.FindFaceIndexForUnitVector(v_norm);
+
+				// Transform the vector into the local coordinate space
+				// of the correct face (which is from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
+				// on each axis, with 0,0,0 being the center of the plane)
+				var plane_anchor = this.children[face_idx];
+				var trafo = plane_anchor.GetInverseGlobalTransform();
+
+				transform_vector(trafo, v_norm);
+				vec3.normalize(v_norm);
+
+				// Project from sphere coordinates onto the flat plane for the face
+				vec3.scale(v_norm, RADIUS / v_norm[1]);
+
+				var x_sample_pos = v_norm[0] - TERRAIN_PLANE_OFFSET;
+				var y_sample_pos = v_norm[2] - TERRAIN_PLANE_OFFSET;
+
+				var SAMPLE_DELTA = 1.0;
+
+				var smoothed_height = 0.0;
+				for (var j = -range, cursor = 0; j <= range; ++j) {
+					for (var k = -range; k <= range; ++k, ++cursor) {
+						smoothed_height += gauss_coeffs[cursor] * plane_anchor.children[0].GetHeightAt(
+							x_sample_pos +  SAMPLE_DELTA * j,
+							y_sample_pos +  SAMPLE_DELTA * k
+						);
+					}
+				}
+				return smoothed_height;
+			};
+		})()
 	});
 
 
