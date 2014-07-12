@@ -134,7 +134,11 @@ var InitTerrainQuadTreeType = function(medea, app) {
 		// AABB in local space
 		local_bb : null,
 
-		// For each corner, a world-space normal to determine visibility
+		// For each upper corner of the node BB the world space point
+		corner_points : null,
+
+		// For each upper corner a world-space normal
+		// This is the normalized |corner_points|
 		corner_normals : null,
 
 		cube_face_idx : null,
@@ -248,8 +252,10 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			var vmax = vec3.create([-1e10, -1e10, -1e10]);
 
 			this.corner_normals = new Array(4);
+			this.corner_points = new Array(4);
 			for (var i = 0; i < 4; ++i) {
 				this.corner_normals[i] = vec3.create();
+				this.corner_points[i] = vec3.create();
 			}
 
 			// First consider the four inner corner points
@@ -260,6 +266,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 				this._ToSpherePoint(scratch);
 
+				vec3.set(scratch, this.corner_points[i]);
 				vec3.normalize(scratch, this.corner_normals[i]);
 				for (var j = 0; j < 3; ++j) {
 					vmin[j] = Math.min(vmin[j], scratch[j]);
@@ -316,6 +323,17 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 			var can_subdivide = this.w != 1;
 
+
+			// We always sub-divide if the player is in the node
+			if (can_subdivide && 
+				cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
+				cam_pos[1] >= vmin[1] && cam_pos[1] < vmax[1] &&
+				cam_pos[2] >= vmin[2] && cam_pos[2] < vmax[2]) {
+				this._SetChildrenEnabled(true);
+				this._Subdivide();
+				return;
+			}
+
 			// Quickly exclude tiles that are on the back side of the sphere.
 			// This case is not caught by the regular culling (since it
 			// doesn't know about the sphere topology hiding half of the
@@ -325,7 +343,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				this._SetChildrenEnabled(false);
 				return;
 			}
-
 			this._SetChildrenEnabled(true);
 
 			// If the node is partially hidden, subdivide down until a
@@ -334,15 +351,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			var PVS_THRESHOLD_LOD = 4;
 			if (can_subdivide && visibility_status == medea.VISIBLE_PARTIAL &&
 				this.node_lod_level >= PVS_THRESHOLD_LOD) {
-				this._Subdivide();
-				return;
-			}
-			
-			// We always sub-divide if the player is in the node
-			if (can_subdivide && 
-				cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
-				cam_pos[1] >= vmin[1] && cam_pos[1] < vmax[1] &&
-				cam_pos[2] >= vmin[2] && cam_pos[2] < vmax[2]) {
 				this._Subdivide();
 				return;
 			}
@@ -405,30 +413,62 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			}
 		},
 
-		_DetermineVisibilityStatus : function(cam_pos) {
-			var norm = vec3.normalize(vec3.create(cam_pos));
-			var world = this.GetGlobalTransform();
+		// Classify this tile w.r.t a world space |cam_pos| as one of
+		// {medea.VISIBLE_ALL, medea.VISIBLE_NONE, medea.VISIBLE_PARTIAL}
+		//
+		// This augments regular culling by taking the sphere geometry into account.
+		_DetermineVisibilityStatus : (function() {
+			var scratch_src = new Float32Array(4);
+			var zero = [0, 0, 0];
+			return function(cam_pos) {
+				var norm = vec3.normalize(vec3.create(cam_pos));
+				var world = this.GetGlobalTransform();
 
-			var count_negative = 0;
-			var scratch_src = new Array(4);
-			for (var i = 0; i < 4; ++i) {
-				vec3.set(this.corner_normals[i], scratch_src);
-				scratch_src[3] = 0;
-				var cn = vec3.normalize(mat4.multiplyVec4(world, scratch_src, scratch_src));
-				var d = vec3.dot(cn, norm);
-				if (d < 0.0) {
+				var count_negative = 0;
+				for (var i = 0; i < 4; ++i) {
+					// First check against the dot product of the corner normals.
+					// If a cube face is > 90 degrees apart from cameras up it
+					// cannot be visible (assuming sane terrain elevation)
+					transform_vector(world, this.corner_normals[i], scratch_src);
+					vec3.normalize(scratch_src);
+					var d = vec3.dot(scratch_src, norm);
+					if (d < 0.0) {
+						++count_negative;
+						continue;
+					}
+					
+					// Perform a line segment - sphere test on the ray from the camera position
+					// to the corner of the tile.
+					var corner = this.corner_points[i];
+					vec3.subtract(corner,world_offset_without_rotation,scratch_src);
+					mat4.multiplyVec3(world, scratch_src, scratch_src);
+					var u = find_closest_point(cam_pos, scratch_src, zero);
+
+					if (u === null || u <= 0.01 || u >= 0.99) {
+						continue;
+					}
+
+					vec3.lerp(cam_pos, scratch_src, u, scratch_src);
+
+					// TODO: this does not take elevations on the line between the camera and
+					// the corner point into account. To further optimize, we could sweep
+					// across the line.
+					if (vec3.length(scratch_src) > RADIUS) {
+						continue;
+					}
+
 					++count_negative;
 				}
-			}
 
-			if (count_negative === 0) {
-				return medea.VISIBLE_ALL;
-			}
-			else if(count_negative === 4) {
-				return medea.VISIBLE_NONE;
-			}
-			return medea.VISIBLE_PARTIAL;
-		},
+				if (count_negative === 0) {
+					return medea.VISIBLE_ALL;
+				}
+				else if(count_negative === 4) {
+					return medea.VISIBLE_NONE;
+				}
+				return medea.VISIBLE_PARTIAL;
+			};
+		})(),
 
 		_Subdivide : function() {
 			var sub_quads = this.sub_quads;
