@@ -170,19 +170,39 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			this._CalculateStaticBB();
 		},
 
-		// Get the height of the terrain at a given 2D x,y coordinate
+		// Get the height of the terrain at a given 2D x,y coordinate.
 		//
 		// The returned height value includes the height scaling of the terrain.
 		GetHeightAt : function(x, y) {
 			// Any level of the tree can respond to a query for any position
 			// as long as all the terrain fits in a single texture. If this
 			// change, this would need to recurse into the tree.
-			x = Math.floor(x);
-			y = Math.floor(y);
+			x0 = Math.floor(x);
+			y0 = Math.floor(y);
+			x1 = x0 + 1;
+			y1 = y0 + 1;
+
+			// Perform a bilinear interpolation of the source texture
+			// Note that this is different from what GetSmoothedHeightAt() does:
+			// interpolation happens at source texture resolution, not relative
+			// to global world resolution.
+			var fx = x - x0;
+			var fy = y - y0;
 
 			var image = app.GetHeightMap(cube_face_idx_to_heightmap_idx(this.cube_face_idx));
 			var data = image.GetData();
-			return data[(y * image.GetWidth() + x) * 4] * TERRAIN_HEIGHT_SCALE;
+			var width = image.GetWidth();
+			var height_at = function(xx, yy) {
+				return data[(yy * width + xx) * 4];
+			};	
+
+			var x0y0 = height_at(x0, y0);
+			var x1y0 = height_at(x1, y0);
+			var x0y1 = height_at(x0, y1);
+			var x1y1 = height_at(x1, y1);
+
+			var smoothed_height = lerp(lerp(x0y0, x1y0, fx), lerp(x0y1, x1y1, fx), fy);
+			return smoothed_height * TERRAIN_HEIGHT_SCALE;
 		},
 
 		// Populates the node's BB with a static AABB that reflects the sphere shape.
