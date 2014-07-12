@@ -63,7 +63,7 @@ var InitTerrainTileType = function(medea, app) {
 			// Cull mode does not change because back-facing faces are
 			// mirrored on exactly two axes, making the face winding the same.
 			pass.CullFaceMode("back");
-			pass.CullFace(false);
+			pass.CullFace(true);
 
 			// Attach the mesh to the scenegraph and position the tile correctly
 			
