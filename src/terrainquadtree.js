@@ -134,12 +134,15 @@ var InitTerrainQuadTreeType = function(medea, app) {
 		// AABB in local space
 		local_bb : null,
 
-		// For each upper corner of the node BB the world space point
+		// Local position of each upper corner of the bounding box
 		corner_points : null,
 
-		// For each upper corner a world-space normal
+		// For each upper corner a local or normal
 		// This is the normalized |corner_points|
 		corner_normals : null,
+
+		worldspace_corner_points : null,
+		worldspace_corner_normals : null,
 
 		cube_face_idx : null,
 
@@ -418,6 +421,29 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			}
 		},
 
+		_UpdateWorldSpaceCorners : function() {
+			if (this.worldspace_corner_normals) {
+				return;
+			}
+
+			// Note: world space points could not generated in _CalculateStaticBB
+			// as the node is not yet attached to the scenegraph at this time.
+
+			this.worldspace_corner_normals = new Array(4);
+			this.worldspace_corner_points = new Array(4);
+			var world = this.GetGlobalTransform();
+
+			for (var i = 0; i < 4; ++i) {
+				var nor = this.worldspace_corner_normals[i] = vec3.create();
+				transform_vector(world, this.corner_normals[i], nor);
+				vec3.normalize(nor);
+
+				var point = this.worldspace_corner_points[i] = vec3.create();
+				vec3.subtract(this.corner_points[i], world_offset_without_rotation, point);
+				mat4.multiplyVec3(world, point, point);
+			}
+		},
+
 		// Classify this tile w.r.t a world space |cam_pos| as one of
 		// {medea.VISIBLE_ALL, medea.VISIBLE_NONE, medea.VISIBLE_PARTIAL}
 		//
@@ -427,16 +453,14 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			var zero = [0, 0, 0];
 			return function(cam_pos) {
 				var norm = vec3.normalize(vec3.create(cam_pos));
-				var world = this.GetGlobalTransform();
+				this._UpdateWorldSpaceCorners();
 
 				var count_negative = 0;
 				for (var i = 0; i < 4; ++i) {
 					// First check against the dot product of the corner normals.
 					// If a cube face is > 90 degrees apart from cameras up it
 					// cannot be visible (assuming sane terrain elevation)
-					transform_vector(world, this.corner_normals[i], scratch_src);
-					vec3.normalize(scratch_src);
-					var d = vec3.dot(scratch_src, norm);
+					var d = vec3.dot(this.worldspace_corner_normals[i], norm);
 					if (d < 0.0) {
 						++count_negative;
 						continue;
@@ -444,16 +468,14 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					
 					// Perform a line segment - sphere test on the ray from the camera position
 					// to the corner of the tile.
-					var corner = this.corner_points[i];
-					vec3.subtract(corner,world_offset_without_rotation,scratch_src);
-					mat4.multiplyVec3(world, scratch_src, scratch_src);
-					var u = find_closest_point(cam_pos, scratch_src, zero);
+					var corner = this.worldspace_corner_points[i];
+					var u = find_closest_point(cam_pos, corner, zero);
 
 					if (u === null || u <= 0.01 || u >= 0.99) {
 						continue;
 					}
 
-					vec3.lerp(cam_pos, scratch_src, u, scratch_src);
+					vec3.lerp(cam_pos, corner, u, scratch_src);
 
 					// TODO: this does not take elevations on the line between the camera and
 					// the corner point into account. To further optimize, we could sweep
