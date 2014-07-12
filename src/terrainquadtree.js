@@ -343,7 +343,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			// To be able to render at this level of the tree, the difference in LOD
 			// between any two corners may be at most 1 or discontinuities will occur.
 			var world = this.GetInverseGlobalTransform();
-			var cam_height = app.GetTerrainNode().GetHeightAt(cam_pos);
+			var cam_height = app.GetTerrainHeightUnderCamera();
 			var cam_pos_local = mat4.multiplyVec3(world, cam_pos, vec3.create());
 
 			var clod_min, clod_max;

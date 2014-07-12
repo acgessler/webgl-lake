@@ -57,7 +57,7 @@ var InitTerrainTileType = function(medea, app) {
 			pass.Set("terrain_uv_offset_scale", [xs, ys, ws, hs]);
 			pass.Set("uv_scale", this.w);
 			pass.Set("terrain_height_under_cam", function() {
-				return app.GetTerrainNode().GetHeightAt(app.GetCameraPosition());
+				return app.GetTerrainHeightUnderCamera();
 			});
 
 			// Cull mode does not change because back-facing faces are

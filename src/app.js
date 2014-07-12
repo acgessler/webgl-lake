@@ -96,6 +96,24 @@ function on_init_context(resources) {
 	var fps_view = false;
 	var orbit_ground_distance = 0;
 
+
+	// Constructs a closure that caches invocations of f() for one frame
+	var CachePerFrame = function(f) {
+		var last_frame = -1;
+		var value = null;
+		return function() {
+			var frame = medea.GetStatistics().frame_count;
+			if (last_frame != frame) {
+				last_frame = frame;
+				value = f();
+			}
+			return value;
+		};
+	};
+
+	// Application state. This is injected into all other modules, which
+	// use it to access global properties such as camera, location or
+	// preloaded shared resources such as heightmaps.
 	var app = {
 
 		GetTerrainNode : function() {
@@ -132,12 +150,19 @@ function on_init_context(resources) {
 			return cam.GetWorldPos();
 		},
 
-		GetCameraPositionRelativeToGround : function() {
+		GetCameraPositionRelativeToGround : CachePerFrame(function() {
 			var vpos = app.GetCameraPosition();
 			var vlen = vec3.length(vpos); 
 			vec3.scale(vpos, (app.GetGroundDistance() + RADIUS) / vlen);
 			return vpos;
-		},
+		}),
+
+		// Get the (scaled) height of the terrain below the camera (i.e.
+		// along the camera's UP axis)
+		GetTerrainHeightUnderCamera : CachePerFrame(function() {
+			return app.GetTerrainNode().GetHeightAt(app.GetCameraPosition());
+		}),
+
 
 		IsFpsView : function(trafo) {
 			return fps_view;
