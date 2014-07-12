@@ -1,4 +1,4 @@
-var GetSphereFpsCamControllerType = function(medea) {
+var GetSphereFpsCamControllerType = function(medea, app) {
 	var SphereFpsCamController = medea.CamController.extend({
 
 		scratch_mat : null,
@@ -22,10 +22,10 @@ var GetSphereFpsCamControllerType = function(medea) {
 		Update : function(dtime, node) {
 			this._super(dtime, node);
 			var pos = node.LocalPos();
-			if (vec3.length(pos) < RADIUS) {
-				return;
-			}
+			
 			var pos_nor = vec3.normalize(pos);
+			vec3.scale(pos_nor, RADIUS + app.GetSmoothedTerrainHeightUnderCamera() + FPS_HEIGHT_OVER_GROUND);
+			node.LocalPos(pos_nor);
 
 			// Adjust coordinate system base to the sphere geometry.
 			// Usually this is only a very small change.
