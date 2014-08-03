@@ -43,14 +43,14 @@ uniform float uv_scale;
 
 const float kDETAIL_NORMAL_STRENGTH = 2.0;
 const float kFINE_NORMAL_STRENGTH = 4.0;
-const float kCOARSE_NORMAL_STRENGTH = 9.0;
+const float kCOARSE_NORMAL_STRENGTH = 7.0;
 
 #ifdef DESERT
 const float kDETAIL_NORMAL_SCALE = 1.0;
 const float kFINE_NORMAL_SCALE = 0.045;
 const float kCOARSE_NORMAL_SCALE = 0.1;
 #else
-const float kDETAIL_NORMAL_SCALE = 1.0;
+const float kDETAIL_NORMAL_SCALE = 2.0;
 const float kFINE_NORMAL_SCALE = 0.035;
 const float kCOARSE_NORMAL_SCALE = 0.05;
 #endif
@@ -202,12 +202,12 @@ void main()
 
 		vec2 x = vec2(base_rock_blend, nor_noise_occ.b);
 		float d = clamp(dot(x, x), 0.0, 1.0);
-		tex = mix(tex_green, tex, d);
+		tex = mix(tex_green, tex, d * 2.0);
 	}
 
 #ifndef DESERT
 	else {
-		vec3 tex_snow = texture2D(snow_texture, uv).rgb;
+		vec3 tex_snow = texture2D(snow_texture, uv).rgb * 2.0;
 		//tex_snow *= tex_snow; // Gamma
 
 		float snow_transition = (kALL_SNOW_HEIGHT - height) / (kALL_SNOW_HEIGHT - kSNOW_BEGIN);
@@ -226,14 +226,14 @@ void main()
 	+ vec3(1.0, 1.0, 1.0) * specular;
 #endif
 	;
-	vec3 fog_color = vec3(0.4,0.55,0.85);
-	float eye_height = length(eye) / 600.0;
-	eye.y = 0.0;
-	float distance = (eye_sq_distance - 500000.0) / (2000000.0 * max(1.0, eye_height));
+	//vec3 fog_color = vec3(0.4,0.55,0.85);
+	//float eye_height = length(eye) / 600.0;
+	//eye.y = 0.0;
+	//float distance = (eye_sq_distance - 500000.0) / (2000000.0 * max(1.0, eye_height));
 
 	// Assemble, Fog, Gamma
     gl_FragColor.a = 1.0;
-	gl_FragColor.rgb = mix(color, fog_color, 0.001 * clamp(distance, 0.0, 1.0));
+	gl_FragColor.rgb = color; //mix(color, fog_color, 0.5 * clamp(distance, 0.0, 1.0));
 #ifdef GAMMA
 	gl_FragColor.rgb = sqrt(gl_FragColor.rgb);
 #endif

@@ -126,7 +126,7 @@ var InitAtmosphereNodeType = function(medea, app) {
 
 		_SetupGroundSkydome : function() {
 			// Create a new dome mesh with a significantly lower polycount
-			var nd = this.node_skydome = medea.CreateSkydomeNode("url:data/textures/midmorning.png", 0.4, 16);
+			var nd = this.node_skydome = medea.CreateSkydomeNode("url:data/textures/midmorning.png", 0.4, 8);
 			nd.Scale(RADIUS_GROUND);
 			this.AddChild(nd);
 		},
