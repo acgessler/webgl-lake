@@ -134,17 +134,25 @@ var InitTerrainQuadTreeType = function(medea, app) {
 		// AABB in local space
 		local_bb : null,
 
-		// Local position of each upper corner of the bounding box
-		lower_corner_points : null,
+		cube_face_idx : null,
 
-		// For each upper corner a local or normal
-		// This is the normalized |lower_corner_points|
+
+		/////////////////////////////////////////////////////
+		// All of the following are arranged such that two
+		// consecutive elements form correspond to an edge
+		// of the quad.
+		/////////////////////////////////////////////////////
+
+		// Local position of each lower/upper corner of the bounding box
+		lower_corner_points : null,
+		upper_corner_points : null,
+
+		// Normalized |lower_corner_points|
 		corner_normals : null,
 
 		worldspace_lower_corner_points : null,
+		worldspace_upper_corner_points : null,
 		worldspace_corner_normals : null,
-
-		cube_face_idx : null,
 
 		init : function(x, y, w, is_back, cube_face_idx) {
 			this._super();
@@ -256,9 +264,11 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 			this.corner_normals = new Array(4);
 			this.lower_corner_points = new Array(4);
+			this.upper_corner_points = new Array(4);
 			for (var i = 0; i < 4; ++i) {
 				this.corner_normals[i] = vec3.create();
 				this.lower_corner_points[i] = vec3.create();
+				this.upper_corner_points[i] = vec3.create();
 			}
 
 			// First consider the four lower corner points
@@ -271,6 +281,8 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 				vec3.set(scratch, this.lower_corner_points[i]);
 				vec3.normalize(scratch, this.corner_normals[i]);
+				vec3.scale(this.corner_normals[i], RADIUS + b[1], this.upper_corner_points[i]);
+
 				for (var j = 0; j < 3; ++j) {
 					vmin[j] = Math.min(vmin[j], scratch[j]);
 					vmax[j] = Math.max(vmax[j], scratch[j]);
@@ -450,6 +462,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 			this.worldspace_corner_normals = new Array(4);
 			this.worldspace_lower_corner_points = new Array(4);
+			this.worldspace_upper_corner_points = new Array(4);
 			var world = this.GetGlobalTransform();
 
 			for (var i = 0; i < 4; ++i) {
@@ -459,6 +472,10 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 				var point = this.worldspace_lower_corner_points[i] = vec3.create();
 				vec3.subtract(this.lower_corner_points[i], world_offset_without_rotation, point);
+				mat4.multiplyVec3(world, point, point);
+
+				point = this.worldspace_upper_corner_points[i] = vec3.create();
+				vec3.subtract(this.upper_corner_points[i], world_offset_without_rotation, point);
 				mat4.multiplyVec3(world, point, point);
 			}
 		},
@@ -487,7 +504,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					
 					// Perform a line segment - sphere test on the ray from the camera position
 					// to the corner of the tile.
-					var corner = this.worldspace_lower_corner_points[i];
+					var corner = this.worldspace_upper_corner_points[i];
 					var u = find_closest_point(cam_pos, corner, zero);
 
 					if (u === null || u <= 0.01 || u >= 0.99) {
@@ -499,7 +516,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					// TODO: this does not take elevations on the line between the camera and
 					// the corner point into account. To further optimize, we could sweep
 					// across the line.
-					if (vec3.length(scratch_src) > RADIUS) {
+					if (vec3.length(scratch_src) > RADIUS ) {
 						continue;
 					}
 
