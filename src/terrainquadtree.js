@@ -394,18 +394,14 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				//  - The minimum LOD of a tile is found at the point
 				//    that is closest to the camera. This point must be an edge point
 				//    (since we handled the case that the camera is within quad earlier)
-				var world = this.GetInverseGlobalTransform();
 				var cam_height = app.GetTerrainHeightUnderCamera();
-				var cam_pos_local = mat4.multiplyVec3(world, cam_pos, vec3.create());
-				vec3.add(cam_pos_local, world_offset_without_rotation, cam_pos_local);
-
 				var clod_min, clod_max;
 	
 				for (var i = 0; i < 4; ++i) {
-					vec3.set(this.corner_normals[i], corner[i]);
+					vec3.set(this.worldspace_corner_normals[i], corner[i]);
 					vec3.scale(corner[i], RADIUS + cam_height);
 					
-					var delta = vec3.subtract(cam_pos_local, corner[i], scratch);
+					var delta = vec3.subtract(cam_pos, corner[i], scratch);
 					var clod = calc_clod(vec3.dot(delta, delta));
 					if (i === 0 || clod > clod_max) {
 						clod_max = clod;
@@ -415,7 +411,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				for (var i = 0; i < 4; ++i) {
 					var p0 = corner[i];
 					var p1 = corner[(i+1) % 4];
-					var u = find_closest_point(p0, p1, cam_pos_local);
+					var u = find_closest_point(p0, p1, cam_pos);
 					if (u === null) {
 						clod_min = 0;
 						break;
@@ -423,7 +419,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					u = saturate(u);
 					vec3.lerp(p0, p1, u, scratch);
 
-					var delta = vec3.subtract(cam_pos_local, scratch, scratch);
+					var delta = vec3.subtract(cam_pos, scratch, scratch);
 					var clod = calc_clod(vec3.dot(delta, delta));
 					if (i === 0 || clod < clod_min) {
 						clod_min = clod;
