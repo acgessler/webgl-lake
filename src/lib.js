@@ -42,16 +42,16 @@ var get_prototype_terrain_material = (function() {
 	var constants = {
 		// TERRAIN_SPECULAR
 		// spec_color_shininess : [1,1,1,32],
-		coarse_normal_texture : 'url:data/textures/heightmap' + heightmap_idx + '-nm_NRM.png',
+		coarse_normal_texture : 'url:data/textures/heightmap' + heightmap_idx + '-nm_NRM.dds',
 		fine_normal_texture : 'url:data/textures/heightmap0-nm_NRM_2.jpg',
 
-		ground_texture: 'url:data/textures/terrain_detail_a.jpg',
+		ground_texture: 'url:data/textures/terrain_detail_a.dds',
 		ground_normal_texture: 'url:data/textures/terrain_detail_a_NRM.png',
 
-		stone_texture: 'url:data/textures/terrain_detail_b.jpg',
+		stone_texture: 'url:data/textures/terrain_detail_b.dds',
 		stone_normal_texture: 'url:data/textures/terrain_detail_b_NRM.png',
 
-		grass_texture: 'url:data/textures/terrain_detail_d.jpg',
+		grass_texture: 'url:data/textures/terrain_detail_d.dds',
 
 		treemap: 'url:data/textures/treemap.png',
 
@@ -78,10 +78,10 @@ var get_prototype_terrain_material = (function() {
 	};	
 
 	if (cube_face_idx === DESERT_IDX) {
-		constants.desert_texture = 'url:data/textures/terrain_detail_e.jpg';
+		constants.desert_texture = 'url:data/textures/terrain_detail_e.dds';
 	}
 	else {
-		constants.snow_texture = 'url:data/textures/terrain_detail_c.jpg';
+		constants.snow_texture = 'url:data/textures/terrain_detail_c.dds';
 	}
 
 	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/terrain', constants, undefined, defines);

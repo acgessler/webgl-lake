@@ -23,6 +23,8 @@ keycodes
 billboard
 standardmesh
 terraintile
+texture
+texture_dds
 
 [resources]
 remote:mcore/shaders/core.psh=data/mcore/shaders/core.psh

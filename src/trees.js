@@ -101,7 +101,7 @@ var InitTreeTileType = function(medea, app) {
 		};
 
 		var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/tree_billboard', {
-			texture : medea.CreateTexture('url:/data/textures/pine_billboard.png', null),
+			texture : medea.CreateTexture('url:/data/textures/pine_billboard.dds', null),
 			scaling : TREE_WIDTH
 		});
 		var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
