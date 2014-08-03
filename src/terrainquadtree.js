@@ -135,13 +135,13 @@ var InitTerrainQuadTreeType = function(medea, app) {
 		local_bb : null,
 
 		// Local position of each upper corner of the bounding box
-		corner_points : null,
+		lower_corner_points : null,
 
 		// For each upper corner a local or normal
-		// This is the normalized |corner_points|
+		// This is the normalized |lower_corner_points|
 		corner_normals : null,
 
-		worldspace_corner_points : null,
+		worldspace_lower_corner_points : null,
 		worldspace_corner_normals : null,
 
 		cube_face_idx : null,
@@ -247,7 +247,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			// Now transform this AABB by the sphere shape
 			//
 			// Note that static BBs are still multiplied with
-			// the node's world transformation, i.e. the orientation
+			// the node's world transformation, i.e. the orientation of the 
 			// terrain plane need not to be taken into account.
 			//
 			var scratch = vec3.create();
@@ -255,21 +255,21 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			var vmax = vec3.create([-1e10, -1e10, -1e10]);
 
 			this.corner_normals = new Array(4);
-			this.corner_points = new Array(4);
+			this.lower_corner_points = new Array(4);
 			for (var i = 0; i < 4; ++i) {
 				this.corner_normals[i] = vec3.create();
-				this.corner_points[i] = vec3.create();
+				this.lower_corner_points[i] = vec3.create();
 			}
 
-			// First consider the four inner corner points
+			// First consider the four lower corner points
 			for (var i = 0; i < 4; ++i) {
-				scratch[0] = ((i & 0x1) ? b : a)[0];
+				scratch[0] = ((i == 1 || i == 2) ? b : a)[0];
 				scratch[1] = a[1];
-				scratch[2] = ((i & 0x2) ? b : a)[2];
+				scratch[2] = ((i >= 2) ? b : a)[2];
 
 				this._ToSpherePoint(scratch);
 
-				vec3.set(scratch, this.corner_points[i]);
+				vec3.set(scratch, this.lower_corner_points[i]);
 				vec3.normalize(scratch, this.corner_normals[i]);
 				for (var j = 0; j < 3; ++j) {
 					vmin[j] = Math.min(vmin[j], scratch[j]);
@@ -317,109 +317,132 @@ var InitTerrainQuadTreeType = function(medea, app) {
 		//
 		// Determines whether to further sub-divide or not and dynamically
 		// updates the scene sub-graph under this node.
-		Render : function(camera, rqmanager) {
-			var cam_pos = camera.GetWorldPos();
-		
-			var bb = this.GetWorldBB();
-			var vmin = bb[0];
-			var vmax = bb[1];
+		Render : (function() {
+			var corner = [
+				vec3.create(),
+				vec3.create(),
+				vec3.create(),
+				vec3.create()
+			];
 
-			var can_subdivide = this.w != 1;
+			var scratch = vec3.create();
+			return function(camera, rqmanager) {
+				var cam_pos = camera.GetWorldPos();
+			
+				var bb = this.GetWorldBB();
+				var vmin = bb[0];
+				var vmax = bb[1];
+
+				var can_subdivide = this.w != 1;
 
 
-			// We always sub-divide if the player is in the node
-			if (cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
-				cam_pos[1] >= vmin[1] && cam_pos[1] < vmax[1] &&
-				cam_pos[2] >= vmin[2] && cam_pos[2] < vmax[2]) {
+				// Always sub-divide if the camera position is in the node
+				if (cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
+					cam_pos[1] >= vmin[1] && cam_pos[1] < vmax[1] &&
+					cam_pos[2] >= vmin[2] && cam_pos[2] < vmax[2]) {
 
-				this._SetChildrenEnabled(can_subdivide);
-				if (can_subdivide) {
+					this._SetChildrenEnabled(can_subdivide);
+					if (can_subdivide) {
+						this._Subdivide();
+					}
+					else {
+						this._RenderAsSingleTile(0);
+					}
+					return;
+				}
+
+				// Exclude tiles that are not visible because they are too
+				// far away to be visible given the sphere shape.
+				//
+				// This case is not caught by the regular culling, which
+				// does not know about the sphere topology.
+				var visibility_status = this._DetermineVisibilityStatus(cam_pos);
+				if (visibility_status === medea.VISIBLE_NONE) {
+					this._SetChildrenEnabled(false);
+					return;
+				}
+				this._SetChildrenEnabled(true);
+
+				// If the node is partially hidden, subdivide down until a
+				// threshold LOD is reached (this is a tradeoff between
+				// drawing off screen / overdraw and an increased batch count).
+				var PVS_THRESHOLD_LOD = 4;
+				if (can_subdivide && visibility_status == medea.VISIBLE_PARTIAL &&
+					this.node_lod_level >= PVS_THRESHOLD_LOD) {
+					this._Subdivide();
+					return;
+				}
+
+				// Also, we always sub-divide if the LOD for the
+				// entire tile (which spans multiple 1x1 tiles) would be
+				// above the maximum LOD level that we can draw.
+				if (can_subdivide && this.w > (1 << (COUNT_LOD_LEVELS-1))) {
+					this._Subdivide();
+					return;
+				}
+
+				// Determine the LOD bracket (i.e. min and max LOD) for this node.
+				//
+				// It is crucial that this exactly replicates the algorithm used in
+				// terrain.vs or there WILL be cracks.
+				//
+				// To be able to render at this level of the tree, the difference in LOD
+				// between any two corners may be at most 1 or discontinuities will occur.
+				//
+				// Brackets:
+				//  - The maximum LOD of a tile is found at one of the corners
+				//  - The minimum LOD of a tile is found at the point
+				//    that is closest to the camera. This point must be an edge point
+				//    (since we handled the case that the camera is within quad earlier)
+				var world = this.GetInverseGlobalTransform();
+				var cam_height = app.GetTerrainHeightUnderCamera();
+				var cam_pos_local = mat4.multiplyVec3(world, cam_pos, vec3.create());
+				vec3.add(cam_pos_local, world_offset_without_rotation, cam_pos_local);
+
+				var clod_min, clod_max;
+	
+				for (var i = 0; i < 4; ++i) {
+					vec3.set(this.corner_normals[i], corner[i]);
+					vec3.scale(corner[i], RADIUS + cam_height);
+					
+					var delta = vec3.subtract(cam_pos_local, corner[i], scratch);
+					var clod = calc_clod(vec3.dot(delta, delta));
+					if (i === 0 || clod > clod_max) {
+						clod_max = clod;
+					}
+				}
+
+				for (var i = 0; i < 4; ++i) {
+					var p0 = corner[i];
+					var p1 = corner[(i+1) % 4];
+					var u = find_closest_point(p0, p1, cam_pos_local);
+					if (u === null) {
+						clod_min = 0;
+						break;
+					}
+					u = saturate(u);
+					vec3.lerp(p0, p1, u, scratch);
+
+					var delta = vec3.subtract(cam_pos_local, scratch, scratch);
+					var clod = calc_clod(vec3.dot(delta, delta));
+					if (i === 0 || clod < clod_min) {
+						clod_min = clod;
+					}
+				}
+				
+				clod_max = Math.ceil(clod_max);
+				clod_min = Math.floor(clod_min);
+
+				var clod_delta = clod_max - clod_min;
+				var can_satisfy_lod = clod_min - this.node_lod_level >= 0;
+				if ((clod_delta > 1.0 || !can_satisfy_lod) && can_subdivide) {
 					this._Subdivide();
 				}
 				else {
-					this._RenderAsSingleTile(0);
+					this._RenderAsSingleTile(clod_min);
 				}
-				return;
-			}
-
-			// Quickly exclude tiles that are on the back side of the sphere.
-			// This case is not caught by the regular culling (since it
-			// doesn't know about the sphere topology hiding half of the
-			// surface at a time).
-			var visibility_status = this._DetermineVisibilityStatus(cam_pos);
-			if (visibility_status === medea.VISIBLE_NONE) {
-				this._SetChildrenEnabled(false);
-				return;
-			}
-			this._SetChildrenEnabled(true);
-
-			// If the node is partially hidden, subdivide down until a
-			// threshold LOD is reached (this is a tradeoff between
-			// overdraw and an increased batch count).
-			var PVS_THRESHOLD_LOD = 4;
-			if (can_subdivide && visibility_status == medea.VISIBLE_PARTIAL &&
-				this.node_lod_level >= PVS_THRESHOLD_LOD) {
-				this._Subdivide();
-				return;
-			}
-
-			// Also, we always sub-divide if the LOD for the
-			// entire tile (which spans multiple 1x1 tiles) would be
-			// above the maximum LOD level.
-			if (can_subdivide && this.w > (1 << (COUNT_LOD_LEVELS-1))) {
-				this._Subdivide();
-				return;
-			}
-
-			// Determine the LOD bracket for this node.
-			//
-			// It is crucial that this exactly replicates the algorithm used in
-			// terrain.vs or there WILL be cracks.
-			//
-			// To be able to render at this level of the tree, the difference in LOD
-			// between any two corners may be at most 1 or discontinuities will occur.
-			var world = this.GetInverseGlobalTransform();
-			var cam_height = app.GetTerrainHeightUnderCamera();
-			var cam_pos_local = mat4.multiplyVec3(world, cam_pos, vec3.create());
-
-			var clod_min, clod_max;
-			var corner = vec3.create();
-
-			var xs = this.x * TILE_SIZE;
-			var ys = this.y * TILE_SIZE;
-			var xe = (this.x + this.w) * TILE_SIZE;
-			var ye = (this.y + this.w) * TILE_SIZE;
-
-			for (var i = 0; i < 4; ++i) {
-				corner[0] = (i & 1 ? xs : xe);
-				corner[1] = cam_height;
-				corner[2] = (i & 2 ? ys : ye);
-
-				corner = this._ToSpherePoint(corner);
-				vec3.subtract(corner, world_offset_without_rotation, corner);
-				
-				var delta = vec3.subtract(cam_pos_local, corner, corner);
-				var clod = calc_clod(vec3.dot(delta, delta));
-				if (i === 0 || clod < clod_min) {
-					clod_min = clod;
-				}
-				if (i === 0 || clod > clod_max) {
-					clod_max = clod;
-				}
-			}
-			
-			//clod_max = Math.ceil(clod_max);
-			//clod_min = 0; //Math.floor(clod_min);
-
-			var clod_delta = clod_max - clod_min;
-			var can_satisfy_lod = clod_min - this.node_lod_level >= 0;
-			if ((clod_delta > 1.0 || !can_satisfy_lod) && can_subdivide) {
-				this._Subdivide();
-			}
-			else {
-				this._RenderAsSingleTile(clod_min);
-			}
-		},
+			};
+		})(),
 
 		_UpdateWorldSpaceCorners : function() {
 			if (this.worldspace_corner_normals) {
@@ -430,7 +453,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			// as the node is not yet attached to the scenegraph at this time.
 
 			this.worldspace_corner_normals = new Array(4);
-			this.worldspace_corner_points = new Array(4);
+			this.worldspace_lower_corner_points = new Array(4);
 			var world = this.GetGlobalTransform();
 
 			for (var i = 0; i < 4; ++i) {
@@ -438,8 +461,8 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				transform_vector(world, this.corner_normals[i], nor);
 				vec3.normalize(nor);
 
-				var point = this.worldspace_corner_points[i] = vec3.create();
-				vec3.subtract(this.corner_points[i], world_offset_without_rotation, point);
+				var point = this.worldspace_lower_corner_points[i] = vec3.create();
+				vec3.subtract(this.lower_corner_points[i], world_offset_without_rotation, point);
 				mat4.multiplyVec3(world, point, point);
 			}
 		},
@@ -468,7 +491,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					
 					// Perform a line segment - sphere test on the ray from the camera position
 					// to the corner of the tile.
-					var corner = this.worldspace_corner_points[i];
+					var corner = this.worldspace_lower_corner_points[i];
 					var u = find_closest_point(cam_pos, corner, zero);
 
 					if (u === null || u <= 0.01 || u >= 0.99) {
