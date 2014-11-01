@@ -192,11 +192,11 @@ function on_init_context(resources) {
 	};
 	
 
-/*
+
     var mesh_parent = medea.CreateNode();
 	medea.LoadSceneFromResource('url:data/meshes/tree5.json', mesh_parent, null, function(st) {
 		if (st == medea.SCENE_LOAD_STATUS_GEOMETRY_FINISHED) {
-			mesh_parent.Translate([1024, 42, 1024]);
+			mesh_parent.Translate([15, 0, -15]);
 			mesh_parent.Scale(0.25);
 			root.AddChild(mesh_parent);
 
@@ -207,7 +207,7 @@ function on_init_context(resources) {
 
 			//medea.CloneNode(mesh_parent);
 		}
-	}); */
+	}); 
 
 	
 
@@ -244,6 +244,11 @@ function on_init_context(resources) {
 	cam_fps.ZNear(1);
 	cam_fps.ZFar(10000);
 	root.AddChild(cam_fps);
+
+	cam_fps.AddChild(mesh_parent);
+
+	var GrassTile = InitGrassTileType(medea, app);
+	cam_fps.AddChild(new GrassTile());
 
     var SphereFpsCamController = GetSphereFpsCamControllerType(medea, app);
     var cc_fps = new SphereFpsCamController();

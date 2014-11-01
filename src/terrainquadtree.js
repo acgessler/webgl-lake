@@ -407,9 +407,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					clod_max = clod;
 				}
 			}
-			
-			//clod_max = Math.ceil(clod_max);
-			//clod_min = 0; //Math.floor(clod_min);
 
 			var clod_delta = clod_max - clod_min;
 			var can_satisfy_lod = clod_min - this.node_lod_level >= 0;
