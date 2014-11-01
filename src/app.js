@@ -8,7 +8,7 @@ var root = null;
 var global_camera_height = RADIUS;
 
 // Variables accessible via dat.gui
-var lod_attenuation = 0.5;
+var lod_attenuation = 0.7;
 var auto_rotate_sun = true;
 
 
