@@ -42,16 +42,16 @@ uniform float inv_terrain_map_dim;
 uniform float uv_scale;
 
 const float kDETAIL_NORMAL_STRENGTH = 2.0;
-const float kFINE_NORMAL_STRENGTH = 4.0;
-const float kCOARSE_NORMAL_STRENGTH = 7.0;
+const float kFINE_NORMAL_STRENGTH = 2.0;
+const float kCOARSE_NORMAL_STRENGTH = 4.0;
 
 #ifdef DESERT
 const float kDETAIL_NORMAL_SCALE = 1.0;
 const float kFINE_NORMAL_SCALE = 0.045;
 const float kCOARSE_NORMAL_SCALE = 0.1;
 #else
-const float kDETAIL_NORMAL_SCALE = 2.0;
-const float kFINE_NORMAL_SCALE = 0.035;
+const float kDETAIL_NORMAL_SCALE = 1.0;
+const float kFINE_NORMAL_SCALE = 0.06;
 const float kCOARSE_NORMAL_SCALE = 0.05;
 #endif
 
