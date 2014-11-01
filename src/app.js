@@ -168,6 +168,10 @@ function on_init_context(resources) {
 			return app.GetTerrainNode().GetSmoothedHeightAt(app.GetCameraPosition());
 		}),
 
+		Get2DCoordinatesOnFaceUnderCamera : CachePerFrame(function() {
+			return app.GetTerrainNode().Get2DCoordinatesOnFace(app.GetCameraPosition());
+		}),
+
 
 		IsFpsView : function(trafo) {
 			return fps_view;

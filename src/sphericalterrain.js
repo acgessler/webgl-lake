@@ -119,11 +119,11 @@ var InitSphericalTerrainType = function(medea, app) {
 			return max_i;
 		},
 
-		// Get the height (measured from a sphere with r=RADIUS) of the terrain under
-		// any given point.
-		//
-		// The returned height value includes the height scaling of the terrain.
-		GetHeightAt : function(v) {
+
+		// For a given world-space position find the sphere face that is below
+		// it under an orthogonal projection and within that face determine
+		// its 2D coordinates.
+		Get2DCoordinatesOnFace : function(v) {
 			// TODO: this algorithm is not continuous across face boundaries
 			var v_norm = vec3.normalize(v, vec3.create());
 
@@ -142,10 +142,36 @@ var InitSphericalTerrainType = function(medea, app) {
 			// Project from sphere coordinates onto the flat plane for the face
 			vec3.scale(v_norm, RADIUS / v_norm[1]);
 
-			// Now this is a 2D problem, recurse into the quadtree to get a response
-			var height = plane_anchor.children[0].GetHeightAt(v_norm[0] - TERRAIN_PLANE_OFFSET,
-				v_norm[2] - TERRAIN_PLANE_OFFSET);
+			return [v_norm[0] - TERRAIN_PLANE_OFFSET, v_norm[2] - TERRAIN_PLANE_OFFSET];
+		},
 
+
+		// Get the height (measured from a sphere with r=RADIUS) of the terrain under
+		// any given point.
+		//
+		// The returned height value includes the height scaling of the terrain.
+		GetHeightAt : function(v) {
+			var v_norm = vec3.normalize(v, vec3.create());
+
+			// Find out which side to look at
+			var face_idx = this.FindFaceIndexForUnitVector(v_norm);
+
+			// Transform the vector into the local coordinate space
+			// of the correct face (which is from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
+			// on each axis, with 0,0,0 being the center of the plane)
+			var plane_anchor = this.children[face_idx];
+			var trafo = plane_anchor.GetInverseGlobalTransform();
+
+			transform_vector(trafo, v_norm);
+			vec3.normalize(v_norm);
+
+			// Project from sphere coordinates onto the flat plane for the face
+			vec3.scale(v_norm, RADIUS / v_norm[1]);
+
+			// Now this is a 2D problem, recurse into the quadtree to get a response
+			var height = plane_anchor.children[0].GetHeightAt(
+				v_norm[0] - TERRAIN_PLANE_OFFSET,
+				v_norm[2] - TERRAIN_PLANE_OFFSET);
 			return height;
 		},
 
