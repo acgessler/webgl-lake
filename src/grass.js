@@ -17,7 +17,7 @@ var InitGrassTileType = function(medea, app) {
 				var ypos = y * size_ratio - TILE_SIZE / 2;
 
 				// Place each blade with a random tilt in angle
-				var angle = Math.random() * Math.PI;
+				var angle = 0; //Math.random() * Math.PI;
 				for (var i = 0; i < GRASS_BLADES_PER_NODE; ++i, angle += Math.PI * 2 / GRASS_BLADES_PER_NODE) {
 					var xd = Math.cos(angle) * GRASS_BLADE_WIDTH / 2;
 					var yd = Math.sin(angle) * GRASS_BLADE_WIDTH / 2;
@@ -72,18 +72,18 @@ var InitGrassTileType = function(medea, app) {
 			texture : medea.CreateTexture('url:/data/textures/gras2.png', null),
 			cam_flat_2d_offset : function() {
 				var v = app.Get2DCoordinatesOnFaceUnderCamera();
-				return v;
-			},
-			heightmap : medea.CreateTexture('url:data/textures/heightmap' + 0 + '.png', null,
-			// We don't need MIPs for the heightmap anyway
-			medea.TEXTURE_FLAG_NO_MIPS |
-			// Hint to medea that the texture will be accessed
-			// from within a vertex shader.
-			medea.TEXTURE_VERTEX_SHADER_ACCESS |
-			medea.TEXTURE_FLAG_CLAMP_TO_EDGE,
 
-			// Only one channel is required
-			medea.TEXTURE_FORMAT_LUM),
+				return [Math.floor(v[0]), Math.floor(v[1])];
+			},
+			terrain_face_transform : function() {
+				var spherical_terrain = app.GetTerrainNode();
+				var vpos = app.GetCameraPosition();
+				var face_index = spherical_terrain.FindFaceIndexForUnitVector(vec3.normalize(vpos));
+				var face_terrain = spherical_terrain.GetFace(face_index);
+
+				return face_terrain.GetGlobalTransform();
+			},
+			heightmap : get_terrain_heightmap(0),
 		});
 		var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
 		mesh.Material().Pass(0).SetDefaultAlphaBlending();
@@ -109,9 +109,9 @@ var InitGrassTileType = function(medea, app) {
 			var state = this.mesh.Material().Pass(0).State();
 			this.mesh.Material().Pass(0).CullFace(false);
 
-			// In FPS/ground mode, no stencil clipping takes place
+			// No grass re
 			if (app.IsFpsView()) {
-				state.stencil_test = false;
+				//this.AddEntity(mesh);
 			}
 		},
 	});

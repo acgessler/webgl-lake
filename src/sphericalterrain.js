@@ -15,17 +15,17 @@ var InitSphericalTerrainType = function(medea, app) {
 	// to determine the height over ground of an arbitrary camera position.
 	//
 	// (Vertices are actually transformed in the quadtree leaf shaders, and TerrainQuadTreeNode
-	//  furtherwork knows that it is used as a sphere face s.t it can set its own BB correctly)
+	//  furthermore knows that it is used as a sphere face s.t it can set its own BB correctly)
 	var SphericalTerrainNode = medea.Node.extend({
 
 		terrain_data : null,
-
+		faces : null,
 		node_mask : null,
 
 		init : function() {
 			this._super();
 
-			//this.terrain_data = terrain_image
+			this.faces = new Array(6);
 
 			for (var i = 0; i < 6; ++i) {
 				var is_back = i >= 3;
@@ -56,6 +56,7 @@ var InitSphericalTerrainType = function(medea, app) {
 				plane_anchor.Translate([0, RADIUS, 0]);
 				plane_anchor.AddChild(plane);
 				this.AddChild(plane_anchor);
+				this.faces[i] = plane;
 			}
 
 			// Add a separate child that will mask the sphere shape in the
@@ -78,6 +79,12 @@ var InitSphericalTerrainType = function(medea, app) {
 			var node_mask = this.node_mask = this.AddChild();
 			node_mask.AddEntity(mesh_mask);	
 			node_mask.SetStaticBB(medea.BB_INFINITE);
+		},
+
+
+		// Gets the root TerrainQuadTreeNode for each face
+		GetFace : function(face_idx) {
+			return this.faces[face_idx];
 		},
 
 

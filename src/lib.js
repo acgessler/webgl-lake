@@ -20,6 +20,19 @@ var get_prototype_terrain_mesh = medealib.Cached(function() {
 	return mesh;
 });
 
+var get_terrain_heightmap = function(heightmap_idx) {
+	return medea.CreateTexture('url:data/textures/heightmap' + heightmap_idx + '.png', null,
+		// We don't need MIPs for the heightmap anyway
+		medea.TEXTURE_FLAG_NO_MIPS |
+		// Hint to medea that the texture will be accessed
+		// from within a vertex shader.
+		medea.TEXTURE_VERTEX_SHADER_ACCESS |
+		medea.TEXTURE_FLAG_CLAMP_TO_EDGE,
+
+		// Only one channel is required
+		medea.TEXTURE_FORMAT_LUM);
+};
+
 // Return the prototype material for drawing terrain. This material
 // is never used for drawing, but terrain tiles use CloneMaterial()
 // to get independent copies.
@@ -65,16 +78,7 @@ var get_prototype_terrain_material = (function() {
 		// The heightmap needs custom parameters so we need to load it
 		// manually (this is no overhead, specifying a URL for a texture
 		// constant directly maps to medea.CreateTexture on that URL)
-		heightmap : medea.CreateTexture('url:data/textures/heightmap' + heightmap_idx + '.png', null,
-			// We don't need MIPs for the heightmap anyway
-			medea.TEXTURE_FLAG_NO_MIPS |
-			// Hint to medea that the texture will be accessed
-			// from within a vertex shader.
-			medea.TEXTURE_VERTEX_SHADER_ACCESS |
-			medea.TEXTURE_FLAG_CLAMP_TO_EDGE,
-
-			// Only one channel is required
-			medea.TEXTURE_FORMAT_LUM),
+		heightmap : get_terrain_heightmap(heightmap_idx),
 	};	
 
 	if (cube_face_idx === DESERT_IDX) {
