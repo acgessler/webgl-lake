@@ -69,10 +69,16 @@ var InitGrassTileType = function(medea, app) {
 		};
 
 		var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/grass', {
-			texture : medea.CreateTexture('url:/data/textures/gras2.png', null),
+			texture : medea.CreateTexture('url:/data/textures/gras_atlas.png', null),
+			vegetation_map : medea.CreateTexture('url:/data/textures/vegetation_map0.png', null,
+				medea.TEXTURE_FLAG_NO_MIPS |
+				// Hint to medea that the texture will be accessed
+				// from within a vertex shader.
+				medea.TEXTURE_VERTEX_SHADER_ACCESS |
+				medea.TEXTURE_FLAG_CLAMP_TO_EDGE),
+			
 			cam_flat_2d_offset : function() {
 				var v = app.Get2DCoordinatesOnFaceUnderCamera();
-
 				return [Math.floor(v[0]), Math.floor(v[1])];
 			},
 			terrain_face_transform : function() {
@@ -87,7 +93,7 @@ var InitGrassTileType = function(medea, app) {
 		});
 		var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
 		mesh.Material().Pass(0).SetDefaultAlphaBlending();
-		mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
+		mesh.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
 		return mesh;
 	};
 
@@ -108,6 +114,8 @@ var InitGrassTileType = function(medea, app) {
 
 			var state = this.mesh.Material().Pass(0).State();
 			this.mesh.Material().Pass(0).CullFace(false);
+
+			//var vdir = var v = app.Get2DCameraDir();
 
 			// No grass re
 			if (app.IsFpsView()) {

@@ -15,12 +15,20 @@
 uniform sampler2D texture;
 uniform vec3 LIGHT_D0_DIR;
 
-const float kGRAS_FADE_BEGIN = 40.0;
-const float kGRAS_FADE_END = 60.0;
+const float kGRAS_FADE_BEGIN = 20.0;
+const float kGRAS_FADE_END = 30.0;
 
 void main()
 {
-  vec4 color = texture2D(texture, FetchTexCoord());
+  vec4 vegetation = FetchVec4(vegetation);
+  if (vegetation.r > 0.9) {
+    discard;
+  }
+
+  vec2 atlas_uv = FetchTexCoord();
+  atlas_uv.y *= 0.5;
+  atlas_uv.x = (atlas_uv.x + floor(vegetation.b * 3.0)) * 0.25;
+  vec4 color = texture2D(texture, atlas_uv);
   if (color.a < 0.4) {
     //discard;
   }
@@ -31,13 +39,12 @@ void main()
   vec3 eye = FetchVec3(eye);
   float distance = length(eye);
 
-  float fade_out = clamp((distance - kGRAS_FADE_BEGIN) / (kGRAS_FADE_END - kGRAS_FADE_BEGIN), 0.0, 1.0 );
+  float fade_out = 1.0 - clamp((distance - kGRAS_FADE_BEGIN) / (kGRAS_FADE_END - kGRAS_FADE_BEGIN), 0.0, 1.0 );
   gl_FragColor.a = color.a * fade_out;
-
 
   // Chrome pads transparent pixel with white, thus loosing
   // the original black which is relevant for sampling
   // though.
-  gl_FragColor.rgb =  diffuse * color.rgb;
+  gl_FragColor.rgb =  diffuse * color.rgb * gl_FragColor.a;
 }
 
