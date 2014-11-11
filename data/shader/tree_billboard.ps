@@ -19,23 +19,15 @@ void main()
 {
   vec4 color = texture2D(texture, FetchTexCoord());
  
-
   vec3 nor = normalize(FetchVec3(normal));
   float diffuse = ComputeLambertDiffuseCoeff(LIGHT_D0_DIR, nor);
 
-  vec3 eye = FetchVec3(eye);
-  float distance = length(eye);
- 
-  //distance - kTREE_BILLBOARD_BEGIN;
-
-  gl_FragColor.a = color.a;
-  if (color.a < 0.6) {
-    //discard;
-  }
+  vec4 eye_fadeout = FetchVec4(eye_fadeout);
 
   // Chrome pads transparent pixel with white, thus loosing
   // the original black which is relevant for sampling
   // though.
-  gl_FragColor.rgb =  diffuse * color.rgb;
+  gl_FragColor = color * eye_fadeout.w;
+  gl_FragColor.rgb *= diffuse;
 }
 

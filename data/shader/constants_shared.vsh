@@ -14,7 +14,7 @@ const float kALL_SNOW_HEIGHT = 0.60;
 const float kSNOW_BEGIN = 0.3;
 
 // Distance range within which to display tree billboards
-const float kTREE_BILLBOARD_BEGIN = kRADIUS;
-const float kTREE_BILLBOARD_END = kTILE_SIZE;
+const float kTREE_BILLBOARD_FADE_BEGIN = kTILE_SIZE * 0.5;
+const float kTREE_BILLBOARD_FADE_END = kTREE_BILLBOARD_FADE_BEGIN * 1.2;
 
 #endif
