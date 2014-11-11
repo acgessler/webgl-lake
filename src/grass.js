@@ -114,13 +114,7 @@ var InitGrassTileType = function(medea, app) {
 
 			var state = this.mesh.Material().Pass(0).State();
 			this.mesh.Material().Pass(0).CullFace(false);
-
-			//var vdir = var v = app.Get2DCameraDir();
-
-			// No grass re
-			if (app.IsFpsView()) {
-				//this.AddEntity(mesh);
-			}
+			this.Enabled(app.IsFpsView());
 		},
 	});
 
