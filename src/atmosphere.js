@@ -36,7 +36,7 @@ var InitAtmosphereNodeType = function(medea, app) {
 				}
 			);
 
-			var mesh_ground = this.mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 46, 6);
+			var mesh_ground = this.mesh_ground = medea.CreateDomeMesh(mat_ground, 0.0, 64, 6);
 			var mesh_sky = this.mesh_sky = medea.CloneMesh(mesh_ground, mat_sky);
 			mesh_ground.RenderQueue(medea.RENDERQUEUE_LAST);
 			mesh_sky.RenderQueue(medea.RENDERQUEUE_LAST);

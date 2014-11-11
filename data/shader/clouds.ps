@@ -5,37 +5,35 @@
 uniform sampler2D texture;
 uniform vec3 LIGHT_D0_DIR;
 
-const float kMIN_DISTANCE = kRADIUS * 0.45;
-const float kMAX_DISTANCE = kRADIUS * 0.7;
-const float kDISTANCE_SCALE = kMAX_DISTANCE - kMIN_DISTANCE;
+const float kMIN_DISTANCE = kRADIUS * 3.2;
+const float kMAX_DISTANCE = kRADIUS * 4.2;
 
 void main()
 {
   
-  vec3 nor = normalize(FetchNormal());
-  vec4 color = texture2D(texture, FetchTexCoord());
+    vec3 nor = normalize(FetchNormal());
+    vec4 color = texture2D(texture, FetchTexCoord());
 
-  vec3 eye = FetchVec3(eye);
-  float distance_scale = (clamp(length(eye), kMIN_DISTANCE, kMAX_DISTANCE) - 
-    kMIN_DISTANCE) / kDISTANCE_SCALE;
+    vec3 eye = FetchVec3(eye);
+    float distance_fade = smoothstep(kMIN_DISTANCE, kMAX_DISTANCE, length(eye));
 
-  // Slightly widen and offset the distribution of the dot product to make clouds
-  // along or slightly across the day/night boundary still appear a bit lit.
-  //
-  // Perturb the normal a bit by the noise function from the b channel of
-  // the input texture.
-  float base_lighting = max(0.0, dot(LIGHT_D0_DIR, nor) + 0.1);
-  vec3 skew_normal = (color.bbb - 0.5) * (base_lighting + 0.3);
-  skew_normal.y = 0.0;
-  float lighting = max(0.0, dot(LIGHT_D0_DIR, normalize(skew_normal))) + base_lighting;
+    // Slightly widen and offset the distribution of the dot product to make clouds
+    // along or slightly across the day/night boundary still appear a bit lit.
+    //
+    // Perturb the normal a bit by the noise function from the b channel of
+    // the input texture.
+    float base_lighting = max(0.0, dot(LIGHT_D0_DIR, nor) + 0.1);
+    vec3 skew_normal = (color.bbb - 0.5) * (base_lighting + 0.3);
+    skew_normal.y = 0.0;
+    float lighting = max(0.0, dot(LIGHT_D0_DIR, normalize(skew_normal))) + base_lighting;
 
-  vec2 sq_lighting = sqrt(vec2(lighting, base_lighting));
-  gl_FragColor.rgb = sq_lighting.xxx * color.b * 0.85;
+    vec2 sq_lighting = sqrt(vec2(lighting, base_lighting));
+    gl_FragColor.rgb = sq_lighting.xxx * color.b * 0.85;
 
-  // Alpha-test to make the cloud boundaries appear a bit sharper
-  if (color.r < 0.15) {
-    discard;
-  }
-  gl_FragColor.a = color.r * distance_scale * sq_lighting.y;
+    // Alpha-test to make the cloud boundaries appear a bit sharper
+    if (color.r < 0.18) {
+        discard;
+    }
+    gl_FragColor.a = color.r * distance_fade * sq_lighting.y;
 }
 
