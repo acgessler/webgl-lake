@@ -139,7 +139,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 		/////////////////////////////////////////////////////
 		// All of the following are arranged such that two
-		// consecutive elements form correspond to an edge
+		// consecutive elements correspond to an edge
 		// of the quad.
 		/////////////////////////////////////////////////////
 
@@ -345,8 +345,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				var vmin = bb[0];
 				var vmax = bb[1];
 
-				var can_subdivide = this.w != 1;
-
+				var can_subdivide = this.w !== 1;
 
 				// Always sub-divide if the camera position is in the node
 				if (cam_pos[0] >= vmin[0] && cam_pos[0] < vmax[0] &&
@@ -375,10 +374,11 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				}
 				this._SetChildrenEnabled(true);
 
+
 				// If the node is partially hidden, subdivide down until a
 				// threshold LOD is reached (this is a tradeoff between
 				// drawing off screen / overdraw and an increased batch count).
-				var PVS_THRESHOLD_LOD = 4;
+				var PVS_THRESHOLD_LOD = 5;
 				if (can_subdivide && visibility_status == medea.VISIBLE_PARTIAL &&
 					this.node_lod_level >= PVS_THRESHOLD_LOD) {
 					this._Subdivide();
@@ -425,8 +425,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					var p1 = corner[(i+1) % 4];
 					var u = find_closest_point(p0, p1, cam_pos);
 					if (u === null) {
-						clod_min = 0;
-						break;
+						clod_min = clod_max;
 					}
 					u = saturate(u);
 					vec3.lerp(p0, p1, u, scratch);
