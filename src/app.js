@@ -35,56 +35,6 @@ function calc_clod(sq_distance) {
 
 
 
-var GRASS_TILE_SIZE = TILE_SIZE * 1.5;
-
-// Number of blades per grass unit
-var GRASS_BLADE_COUNT = 3;
-
-function build_grass_mesh() {
-	var threshold = GRASS_TILE_SIZE * GRASS_TILE_SIZE;
-	var unit_count = 0;
-	for (var y = 0; y < GRASS_TILE_SIZE; ++y) {
-		for (var x = 0; x < GRASS_TILE_SIZE; ++x) {
-			if (x*x + y*y > threshold) {
-				continue;
-			}
-			++unit_count;
-		}
-	}
-
-	// TODO: this should use instancing to supply the positions
-	var pos = new Float32Array(unit_count * GRASS_BLADE_COUNT * 6 * 3);
-	var uv = new Float32Array(unit_count * GRASS_BLADE_COUNT * 6 * 2);
-	var pos_cur = 0;
-	var uv_cur = 0;
-	for (var y = 0; y < GRASS_TILE_SIZE; ++y) {
-		for (var x = 0; x < GRASS_TILE_SIZE; ++x) {
-			if (x*x + y*y > threshold) {
-				continue;
-			}
-			
-			for (var i = 0; i < GRASS_BLADE_COUNT; ++i) {
-
-			}
-		}
-	}
-
-	var vertex_channels = {
-		positions: pos,
-		uvs : [uv]
-	};
-
-	var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/grass', {
-		texture : medea.CreateTexture('url:/data/textures/grass1.png', null
-			/*,medea.TEXTURE_PREMULTIPLIED_ALPHA*/)
-	});
-	var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
-	mesh.Material().Pass(0).SetDefaultAlphaBlending();
-	mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
-}
-
-
-
 // Invoked once the medea context (global |medea|) is ready to use
 function on_init_context(resources) {
 	console.log("Context created, setting up scene");
