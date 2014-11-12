@@ -9,10 +9,14 @@ function InitDetailTreeNodeType(medea, app) {
 	medea.LoadSceneFromResource('url:data/meshes/tree5.json', tree_prototype, null, function(st) {
 		if (st == medea.SCENE_LOAD_STATUS_GEOMETRY_FINISHED) {
 			tree_prototype.Scale(0.15);
+			tree_prototype.Translate([2, -0.25, 2]);
 
 			tree_prototype.FilterEntitiesRecursively([medea.Mesh], function(m) {
-				//m.Material().Pass(0).SetDefaultAlphaBlending();
-				//m.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
+				var pass = m.Material().Pass(0);
+				pass.SetDefaultAlphaBlending();
+				pass.DepthTest(true);
+				pass.DepthWrite(true);
+				m.RenderQueue(medea.RENDERQUEUE_ALPHA_EARLY);
 			});
 
 			loaded_tree = true;
