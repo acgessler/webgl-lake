@@ -8,7 +8,7 @@ var root = null;
 var global_camera_height = RADIUS;
 
 // Variables accessible via dat.gui
-var lod_attenuation = 0.7;
+var lod_attenuation = 1.0;
 var auto_rotate_sun = true;
 
 
@@ -28,7 +28,7 @@ function on_tick(dtime) {
 //
 // Must keep in sync with terrain.vs
 function calc_clod(sq_distance) {
-	var log_distance = log2(sq_distance * 3.0 / (16.0 * 16.0)) * 0.5 * lod_attenuation;
+	var log_distance = log2(sq_distance / (64.0 * 64.0)) * 0.5 * lod_attenuation;
 	return Math.max(0, Math.min(COUNT_LOD_LEVELS - 1,
 		log_distance));
 }

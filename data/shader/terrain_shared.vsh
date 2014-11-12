@@ -22,7 +22,7 @@ uniform float terrain_height_under_cam;
 const float kMIN_LOD = 0.0;
 const float kMAX_LOD = 8.0;
 
-const float kLOD_BASE_UNIT = 16.0;
+const float kLOD_BASE_UNIT = 64.0;
 const float kSQ_LOD_BASE_UNIT = kLOD_BASE_UNIT * kLOD_BASE_UNIT;
 
 // Map from texel value in [0,1] to final, scaled terrain height
@@ -37,7 +37,7 @@ vec2 TilePositionToTerrainUVCoordinates(vec2 tile_pos_xz) {
 }
 
 float CalcLOD(highp float sq_distance) {
-	highp float lod = log2(sq_distance * 3.0 / kSQ_LOD_BASE_UNIT) * lod_attenuation * 0.5;
+	highp float lod = log2(sq_distance / kSQ_LOD_BASE_UNIT) * lod_attenuation * 0.5;
 	return clamp(lod, kMIN_LOD, kMAX_LOD);
 }
 
