@@ -70,7 +70,7 @@ var InitGrassTileType = function(medea, app) {
 
 		var mat = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/grass', {
 			texture : medea.CreateTexture('url:/data/textures/gras_atlas.png', null),
-			vegetation_map : medea.CreateTexture('url:/data/textures/vegetation_map0.png', null,
+			vegetation_map : medea.CreateTexture('url:/data/textures/vegetation_map0.jpg', null,
 				medea.TEXTURE_FLAG_NO_MIPS |
 				// Hint to medea that the texture will be accessed
 				// from within a vertex shader.
@@ -114,7 +114,7 @@ var InitGrassTileType = function(medea, app) {
 
 			var state = this.mesh.Material().Pass(0).State();
 			this.mesh.Material().Pass(0).CullFace(false);
-			this.Enabled(app.IsFpsView());
+			//this.Enabled(app.IsFpsView());
 		},
 	});
 
