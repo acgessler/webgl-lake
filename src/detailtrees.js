@@ -9,14 +9,15 @@ function InitDetailTreeNodeType(medea, app) {
 	medea.LoadSceneFromResource('url:data/meshes/tree5.json', tree_prototype, null, function(st) {
 		if (st == medea.SCENE_LOAD_STATUS_GEOMETRY_FINISHED) {
 			tree_prototype.Scale(0.15);
-			tree_prototype.Translate([2, -0.25, 2]);
+			// TODO: actually center trees properly
+			tree_prototype.Translate([0, -0.3, 0]);
 
 			tree_prototype.FilterEntitiesRecursively([medea.Mesh], function(m) {
 				var pass = m.Material().Pass(0);
 				pass.SetDefaultAlphaBlending();
 				pass.DepthTest(true);
 				pass.DepthWrite(true);
-				m.RenderQueue(medea.RENDERQUEUE_ALPHA_EARLY);
+				m.RenderQueue(medea.RENDERQUEUE_ALPHA);
 			});
 
 			loaded_tree = true;
