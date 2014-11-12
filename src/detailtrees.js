@@ -54,7 +54,7 @@ function InitDetailTreeNodeType(medea, app) {
 			if (!loaded_tree) {
 				return;
 			}
-			
+
 			var cam_world_pos = camera.GetWorldPos();
 
 			// Check if the camera moved more than the threshold distance since the last update
@@ -67,9 +67,18 @@ function InitDetailTreeNodeType(medea, app) {
 			this.last_update_cam_world_pos = cam_world_pos;
 			this.RemoveAllChildren();
 
-			var trees = app.GetTerrainNode().GetTreesInRadius(cam_world_pos, TREE_BILLBOARD_FADE_END * 1.2);
+			var tree_radius = TREE_BILLBOARD_FADE_END * 1.2;
+			var tree_radius_sq = tree_radius * tree_radius;
+
+			var trees = app.GetTerrainNode().GetTreesInRadius(cam_world_pos, tree_radius);
 			for (var i = 0; i < trees.length; ++i) {
 				var tree_pos = trees[i];
+
+				vec3.subtract(cam_world_pos, tree_pos, scratch);
+				if (vec3.dot(scratch, scratch) > tree_radius_sq) {
+					continue;
+				}
+
 				var tree_node = medea.CreateNode();
 				
 				// Derive a stable coordinate system based on the position of the tree on the sphere,

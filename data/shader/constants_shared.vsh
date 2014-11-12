@@ -17,4 +17,8 @@ const float kSNOW_BEGIN = 0.3;
 const float kTREE_BILLBOARD_FADE_BEGIN = kTILE_SIZE * 0.5;
 const float kTREE_BILLBOARD_FADE_END = kTREE_BILLBOARD_FADE_BEGIN * 1.2;
 
+// Distance range for fading grass
+const float kGRAS_FADE_BEGIN = 20.0;
+const float kGRAS_FADE_END = 30.0;
+
 #endif

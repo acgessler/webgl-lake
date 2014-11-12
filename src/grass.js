@@ -81,6 +81,7 @@ var InitGrassTileType = function(medea, app) {
 				var v = app.Get2DCoordinatesOnFaceUnderCamera();
 				return [Math.floor(v[0]), Math.floor(v[1])];
 			},
+
 			terrain_face_transform : function() {
 				var spherical_terrain = app.GetTerrainNode();
 				var vpos = app.GetCameraPosition();
@@ -92,29 +93,41 @@ var InitGrassTileType = function(medea, app) {
 			heightmap : get_terrain_heightmap(0),
 		});
 		var mesh = medea.CreateSimpleMesh(vertex_channels, null, mat);
-		mesh.Material().Pass(0).SetDefaultAlphaBlending();
+
+		var pass = mesh.Material().Pass(0);
+		pass.SetDefaultAlphaBlending();
 		mesh.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
+		pass.CullFace(false);
 		return mesh;
 	};
 
 
 	var GrassTile = medea.Node.extend({
 		mesh : null,
+		active : false,
 
 		init : function(x) {
 			this._super();
 			
-			var mesh = this.mesh = compute_grass_mesh();
-			this.AddEntity(mesh);
+			this.mesh = compute_grass_mesh();
 			this.SetStaticBB(medea.BB_INFINITE);
 		},
 
 		Render : function(camera, rqmanager) {
 			this._super(camera, rqmanager);
-
-			var state = this.mesh.Material().Pass(0).State();
-			this.mesh.Material().Pass(0).CullFace(false);
-			//this.Enabled(app.IsFpsView());
+			var height_over_ground = app.GetGroundDistance();
+			// Do not bother rendering grass if the camera is too far away
+			// s.t. it would render at full transparency
+			var new_active = height_over_ground < GRAS_FADE_END * 1.5;
+			if (new_active != this.active) {
+				this.active = new_active;
+				if(new_active) {
+					this.AddEntity(this.mesh);
+				}
+				else {
+					this.RemoveEntity(this.mesh);
+				}
+			}
 		},
 	});
 
