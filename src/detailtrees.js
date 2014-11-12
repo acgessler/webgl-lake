@@ -1,9 +1,7 @@
 
 function InitDetailTreeNodeType(medea, app) {
 
-	
-
-	// Load meshes asynchronously
+	// Load both detail tree meshes asynchronously
 	var loaded_tree = false;
 	var tree_prototype = medea.CreateNode();
 	medea.LoadSceneFromResource('url:data/meshes/tree5.json', tree_prototype, null, function(st) {
@@ -21,6 +19,26 @@ function InitDetailTreeNodeType(medea, app) {
 			});
 
 			loaded_tree = true;
+		}
+	}); 
+
+	var loaded_pine = false;
+	var pine_prototype = medea.CreateNode();
+	medea.LoadSceneFromResource('url:data/meshes/pine.json', pine_prototype, null, function(st) {
+		if (st == medea.SCENE_LOAD_STATUS_GEOMETRY_FINISHED) {
+			pine_prototype.Scale(0.04);
+			// TODO: actually center trees properly
+			pine_prototype.Translate([0, -0.3, 0]);
+
+			pine_prototype.FilterEntitiesRecursively([medea.Mesh], function(m) {
+				var pass = m.Material().Pass(0);
+				pass.SetDefaultAlphaBlending();
+				pass.DepthTest(true);
+				pass.DepthWrite(true);
+				m.RenderQueue(medea.RENDERQUEUE_ALPHA);
+			});
+
+			loaded_pine = true;
 		}
 	}); 
 
@@ -51,7 +69,7 @@ function InitDetailTreeNodeType(medea, app) {
 		Render : function(camera, rqmanager) {
 			this._super();
 
-			if (!loaded_tree) {
+			if (!loaded_tree || !loaded_pine) {
 				return;
 			}
 
@@ -128,9 +146,12 @@ function InitDetailTreeNodeType(medea, app) {
 
 				tree_node.LocalTransform(orientation);
 
+				var tree_scene_node = medea.CloneNode(noise > 1024 ? tree_prototype : pine_prototype);
+				tree_scene_node.Scale(1.0 + (noise & 15) / 32.0);
+
 				// Add a shallow clone of the prototype node holding the tree mesh.
 				// This re-creates the node hierarchy, but uses the same entities.
-				tree_node.AddChild(medea.CloneNode(tree_prototype));
+				tree_node.AddChild(tree_scene_node);
 				this.AddChild(tree_node);
 			}
 		},
