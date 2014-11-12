@@ -71,7 +71,7 @@ vec3 GetDetailNormal(vec2 uv, float distance_blend, float base_rock_blend) {
 			texture2D(ground_normal_texture, uv * 0.5).rgb,
 			distance_blend
 	);
-	vec3 nor_rock = texture2D(stone_normal_texture, uv).rgb;
+	vec3 nor_rock = texture2D(stone_normal_texture, uv * 4.0).rgb;
 	vec3 blend = mix(nor_base, nor_rock, base_rock_blend);
 	return SwizzleColorToNormal(blend.rg, kDETAIL_NORMAL_SCALE);
 }
@@ -146,7 +146,7 @@ void main()
 	float diffuse = ComputeLambertDiffuseCoeff(model_light_dir_0, N);
 
 	// Apply ambient occlusion
-	diffuse = diffuse * clamp(nor_noise_occ.a, 0.7, 1.0);
+	diffuse = diffuse * clamp(nor_noise_occ.a, 0.5, 1.0);
 
 #ifdef TERRAIN_SPECULAR
 	// Specular contribution: simple blinn with self-shadowing
@@ -216,7 +216,7 @@ void main()
 #endif // DESERT
 
 	// Forest areas are darker and greener
-	float forest_attenuation = max(forestation, 0.4);
+	float forest_attenuation = max(forestation, 0.5);
 	tex.g += 0.25 * (1.0 - forest_attenuation);
 	tex *= forest_attenuation;
 

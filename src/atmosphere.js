@@ -174,9 +174,9 @@ var InitAtmosphereNodeType = function(medea, app) {
 			pass.Set("fOuterRadius", OUTER_RADIUS);
  			pass.Set("fOuterRadius2", OUTER_RADIUS * OUTER_RADIUS);
 
-			pass.Set("fKrESun", 0.0025 * 20.0);
+			pass.Set("fKrESun", 0.0035 * 20.0);
 			pass.Set("fKmESun", 0.0010 * 20.0);
-			pass.Set("fKr4PI", 0.0025 * 4.0 * 3.141592653);
+			pass.Set("fKr4PI", 0.0035 * 4.0 * 3.141592653);
 			pass.Set("fKm4PI", 0.0010 * 4.0 * 3.141592653);
 			pass.Set("fScale", 1.0 / (OUTER_RADIUS - RADIUS_GROUND));
 			pass.Set("fScaleDepth", 0.25);

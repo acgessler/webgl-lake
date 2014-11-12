@@ -127,18 +127,77 @@ var InitSphericalTerrainType = function(medea, app) {
 		},
 
 
+		// For a given world-space position |v| find the world-space positions
+		// of all trees anchors within |radius| on the surface (approximately)
+		GetTreesInRadius : function(v, radius) {
+			var face_coords = this.Get2DCoordinatesOnFace(v);
+			var face_idx = this.FindFaceIndexForUnitVector(vec3.normalize(v, vec3.create()));
+			var tree_image = app.GetTreeMap(0 /*face_idx TODO */);
+
+			// TODO: de-duplicate from trees.js
+			var data = tree_image.GetData(), w = tree_image.GetWidth(), h = tree_image.GetHeight();
+			var size_ratio = TERRAIN_PLANE_WIDTH / TREE_MAP_WIDTH;
+
+			var scaled_radius = radius / size_ratio;
+			var scaled_radius_sq = scaled_radius * scaled_radius;
+
+			var scaled_center_x = face_coords[0] / size_ratio;
+			var scaled_center_y = face_coords[1] / size_ratio;
+
+			var ymin = Math.floor(clamp(0, h, scaled_center_y - scaled_radius));
+			var ymax = Math.ceil (clamp(0, h, scaled_center_y + scaled_radius));
+			var xmin = Math.floor(clamp(0, w, scaled_center_x - scaled_radius));
+			var xmax = Math.ceil (clamp(0, w, scaled_center_x + scaled_radius));
+
+			var trees = [];
+
+			for (var y = ymin; y < ymax; ++y) {
+				var yd = y - scaled_center_y;
+				yd *= yd;
+
+				for (var x = xmin; x < xmax; ++x) {
+					var xd = x - scaled_center_x;
+					xd *= xd;
+
+					if (xd + yd > scaled_radius_sq) {
+						continue;
+					}
+
+					if (data[(y * w + x) * 4] === 0) {
+						// This is a tree, find the height under it and emit
+						// the world-space position of the tree anchor.
+						var plane_anchor = this.children[face_idx];
+						var height = plane_anchor.children[0].GetHeightAt(x * size_ratio, y * size_ratio);
+
+						var x_offset = (x * size_ratio) + TERRAIN_PLANE_OFFSET;
+						var y_offset = (y * size_ratio) + TERRAIN_PLANE_OFFSET;
+
+						var trafo = plane_anchor.GetGlobalTransform();
+						var v = vec3.create([x_offset, RADIUS, y_offset]);
+						transform_vector(trafo, v);
+						vec3.normalize(v);
+						vec3.scale(v, RADIUS + height);
+
+						trees.push(v);
+					}
+				}
+			}
+
+			return trees;
+		},
+
+
 		// For a given world-space position find the sphere face that is below
 		// it under an orthogonal projection and within that face determine
-		// its 2D coordinates.
+		// the 2D coordinates of the camera
 		Get2DCoordinatesOnFace : function(v) {
-			// TODO: this algorithm is not continuous across face boundaries
 			var v_norm = vec3.normalize(v, vec3.create());
 
 			// Find out which side to look at
 			var face_idx = this.FindFaceIndexForUnitVector(v_norm);
 
 			// Transform the vector into the local coordinate space
-			// of the correct face (which is from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
+			// of the correct face (which goes from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
 			// on each axis, with 0,0,0 being the center of the plane)
 			var plane_anchor = this.children[face_idx];
 			var trafo = plane_anchor.GetInverseGlobalTransform();
@@ -164,7 +223,7 @@ var InitSphericalTerrainType = function(medea, app) {
 			var face_idx = this.FindFaceIndexForUnitVector(v_norm);
 
 			// Transform the vector into the local coordinate space
-			// of the correct face (which is from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
+			// of the correct face (which goes from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
 			// on each axis, with 0,0,0 being the center of the plane)
 			var plane_anchor = this.children[face_idx];
 			var trafo = plane_anchor.GetInverseGlobalTransform();
@@ -181,6 +240,7 @@ var InitSphericalTerrainType = function(medea, app) {
 				v_norm[2] - TERRAIN_PLANE_OFFSET);
 			return height;
 		},
+
 
 		// Get a gaussian smoothed height value for the terrain under a given point.
 		//

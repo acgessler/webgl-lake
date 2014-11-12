@@ -9,11 +9,31 @@ function log2(x) {
 	return Math.log(x) / Math.log(2.0);
 }
 
+///////////////////////////////////////////////////////////////////////////
+// Clamp |x| to [xmin, xmax]
+function clamp(xmin, xmax, x) {
+	return Math.min(xmax, Math.max(xmin, x));
+}
+
 
 ///////////////////////////////////////////////////////////////////////////
 // Clamp |x| to [0, 1]
 function saturate(x) {
 	return Math.min(1.0, Math.max(0.0, x));
+}
+
+
+/////////////////////////////////////////////////////////////////////////////
+//http://werxltd.com/wp/2010/05/13/javascript-implementation-of-javas-string-hashcode-method/
+function string_hash(s) {
+	var hash = 0;
+	if (s.length == 0) return hash;
+	for (i = 0; i < s.length; i++) {
+		char = s.charCodeAt(i);
+		hash = ((hash<<5)-hash)+char;
+		hash = hash & hash; // Convert to 32bit integer
+	}
+	return hash;
 }
 
 

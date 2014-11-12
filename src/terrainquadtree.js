@@ -374,7 +374,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				}
 				this._SetChildrenEnabled(true);
 
-
 				// If the node is partially hidden, subdivide down until a
 				// threshold LOD is reached (this is a tradeoff between
 				// drawing off screen / overdraw and an increased batch count).

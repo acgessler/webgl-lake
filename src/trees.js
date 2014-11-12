@@ -1,10 +1,8 @@
 
-var InitTreeTileType = function(medea, app) {
+function InitTreeTileType(medea, app) {
 
-	var compute_tree_mesh = (function() {
-		var tree_meshes = {};
-		return function(cube_face_idx) {
-
+	var tree_meshes = {};
+	var compute_tree_mesh = function(cube_face_idx) {
 		var heightmap_idx = cube_face_idx_to_heightmap_idx(cube_face_idx);
 
 		var key = heightmap_idx;
@@ -109,8 +107,7 @@ var InitTreeTileType = function(medea, app) {
 		mesh.RenderQueue(medea.RENDERQUEUE_ALPHA);
 		tree_meshes[key] = mesh;
 		return mesh;
-		};
-	})();
+	};
 
 
 	var TreeTile = medea.Node.extend({
@@ -150,3 +147,6 @@ var InitTreeTileType = function(medea, app) {
 
 	return TreeTile;
 }
+
+
+

@@ -146,28 +146,16 @@ function on_init_context(resources) {
 	};
 	
 
-
-    var mesh_parent = medea.CreateNode();
-	medea.LoadSceneFromResource('url:data/meshes/tree5.json', mesh_parent, null, function(st) {
-		if (st == medea.SCENE_LOAD_STATUS_GEOMETRY_FINISHED) {
-			mesh_parent.Translate([15, 0, -15]);
-			mesh_parent.Scale(0.25);
-			root.AddChild(mesh_parent);
-
-			mesh_parent.FilterEntitiesRecursively([medea.Mesh], function(m) {
-				m.Material().Pass(0).SetDefaultAlphaBlending();
-				m.RenderQueue(medea.RENDERQUEUE_ALPHA);
-			});
-
-			//medea.CloneNode(mesh_parent);
-		}
-	}); 
-
-	
-
 	var AtmosphereNode = InitAtmosphereNodeType(medea, app);
-	
 	var SphericalTerrainNode = InitSphericalTerrainType(medea, app);
+	var OrbitCamController = GetOrbitCamControllerType(medea, app);
+	var SphereFpsCamController = GetSphereFpsCamControllerType(medea, app);
+	var GrassTile = InitGrassTileType(medea, app);
+	var DetailTreeNode = InitDetailTreeNodeType(medea, app);
+
+
+
+
 	var terrain_root = new SphericalTerrainNode();
 	root.AddChild(terrain_root);
 
@@ -179,7 +167,6 @@ function on_init_context(resources) {
 	cam.ZNear(1);
 	cam.ZFar(10000);
 
-	var OrbitCamController = GetOrbitCamControllerType(medea, app);
 	var cc = new  OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
 	cc.TerrainNode(terrain_root);
 	cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
@@ -199,12 +186,11 @@ function on_init_context(resources) {
 	cam_fps.ZFar(10000);
 	root.AddChild(cam_fps);
 
-	cam_fps.AddChild(mesh_parent);
+	//cam_fps.AddChild(mesh_parent);
 
-	var GrassTile = InitGrassTileType(medea, app);
 	cam_fps.AddChild(new GrassTile());
+	root.AddChild(new DetailTreeNode());
 
-    var SphereFpsCamController = GetSphereFpsCamControllerType(medea, app);
     var cc_fps = new SphereFpsCamController();
     cc_fps.TerrainNode(terrain_root);
 	cc_fps.Enable();
@@ -264,7 +250,7 @@ function on_init_context(resources) {
 		if (app.IsFpsView()) {
 			var up = cam_fps.GetWorldYAxis();
 			var right = cam_fps.GetWorldXAxis();
-			vec3.lerp(up, right, 0.4);
+			vec3.lerp(up, right, 0.5);
 			vec3.normalize(up);
 			vec3.negate(up);
 			light_entity.Direction(up);

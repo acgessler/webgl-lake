@@ -45,6 +45,6 @@ void main()
   // Chrome pads transparent pixel with white, thus loosing
   // the original black which is relevant for sampling
   // though.
-  gl_FragColor.rgb =  diffuse * color.rgb * gl_FragColor.a;
+  gl_FragColor.rgb =  diffuse * diffuse * color.rgb * gl_FragColor.a;
 }
 
