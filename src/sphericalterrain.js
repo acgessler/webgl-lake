@@ -1,6 +1,5 @@
 var InitSphericalTerrainType = function(medea, app) {
 
-	var TerrainQuadTreeNode = InitTerrainQuadTreeType(medea, app);
 
 	var axes = [
 		[1, 0, 0],
@@ -25,6 +24,7 @@ var InitSphericalTerrainType = function(medea, app) {
 		init : function() {
 			this._super();
 
+			this.AddChild(new DetailTreeNode());
 			this.faces = new Array(6);
 
 			for (var i = 0; i < 6; ++i) {

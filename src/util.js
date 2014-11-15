@@ -9,6 +9,19 @@ function log2(x) {
 	return Math.log(x) / Math.log(2.0);
 }
 
+
+///////////////////////////////////////////////////////////////////////////
+// Given an approximate |sq_distance| of an object, determine the
+// continuous LOD (CLOD) value for it. CLOD is in [0, COUNT_LOD_LEVELS[
+//
+// Must keep in sync with terrain.vs
+function calc_clod(sq_distance) {
+	var log_distance = log2(sq_distance / (64.0 * 64.0)) * 0.5 * lod_attenuation;
+	return Math.max(0, Math.min(COUNT_LOD_LEVELS - 1,
+		log_distance));
+}
+
+
 ///////////////////////////////////////////////////////////////////////////
 // Clamp |x| to [xmin, xmax]
 function clamp(xmin, xmax, x) {

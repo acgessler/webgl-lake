@@ -94,11 +94,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 	]);
 
 
-	var WaterTile = InitWaterTileType(medea);
-	var TerrainTile = InitTerrainTileType(medea, app);
-	var TreeTile = InitTreeTileType(medea, app);
-
-
 	// Adaptive Quad-Tree node to dynamically subdivide the terrain.
 	//
 	// The rule for splitting is that a single terrain tile may

@@ -1,223 +1,256 @@
 
-// Global medea instance
-var viewport = null;
-var root = null;
-
-
-// Global state
-var global_camera_height = RADIUS;
+// Global medea instance which is yet uninitialized
+var medea = null;
 
 // Variables accessible via dat.gui
 var lod_attenuation = 1.0;
 var auto_rotate_sun = true;
 
+///////////////////////////////////////////////////////////////////////////////////
+// Types imported from other modules
+// Imported lazily after medea is initialized.
+var AtmosphereNode;
+var SphericalTerrainNode;
+var OrbitCamController;
+var SphereFpsCamController;
+var GrassTile;
+var DetailTreeNode;
+var TerrainQuadTreeNode;
+var WaterTile;
+var TerrainTile;
+var TreeTile;
 
-function on_init_error() {
-	console.log("Failed to initialize");
-}
+// Constructs a closure that caches invocations of f() for one frame
+var CachePerFrame = function(f) {
+	var last_frame = -1;
+	var value = null;
+	return function() {
+		var frame = medea.GetStatistics().count_frames;
+		if (last_frame != frame) {
+			last_frame = frame;
+			value = f();
+		}
+		return value;
+	};
+};
 
-// Called by medea once per frame
-function on_tick(dtime) {
-	return true;
-}
 
-
-
-// Given an approximate |sq_distance| of an object, determine the
-// continuous LOD (CLOD) value for it. CLOD is in [0, COUNT_LOD_LEVELS[
+///////////////////////////////////////////////////////////////////////////////////
+// app
 //
-// Must keep in sync with terrain.vs
-function calc_clod(sq_distance) {
-	var log_distance = log2(sq_distance / (64.0 * 64.0)) * 0.5 * lod_attenuation;
-	return Math.max(0, Math.min(COUNT_LOD_LEVELS - 1,
-		log_distance));
-}
+// Core application state. This is injected into all other modules and manages
+// initialization, shutdown, global state, frame management and scene updates.
+//
+///////////////////////////////////////////////////////////////////////////////////
+var app = {
+
+	// Fields
+	root : null,
+	viewport : null,
+	terrain_root : null,
+	dome_node : null,
+
+	fps_view : false,
+	orbit_ground_distance : 0,
+	orbit_cam : null,
+	orbit_cam_controller : null,
+	fps_cam : null,
+	fps_cam_controller : null,
+
+	light : null,
+	light_entity : null,
+	sun : null,
+	time_of_day : -1,
+
+	input_handler : null,
+
+	/////////////////////////////////////////////////////////////////////////
+	// Initialization
+
+	Init : function() {
+		this.input_handler = medea.CreateInputHandler();
+
+		this.viewport = medea.CreateViewport();
+		this.viewport.ClearColor([0.0,0.0,0.0]);
+
+		this.root = medea.RootNode();
+		
+		this._InitPlanet();
+		this._InitStars();
+		this._InitCameras();
+	   	this._InitSun();
+
+	   	// TODO: this belongs into the spherical terrain code, but currently
+		// has to be attached to the FPS camera. Maybe, cameras should be
+		// owned elsewhere.
+		this.fps_cam.AddChild(new GrassTile());
+	},
+
+	_InitCameras : function() {
+		// Configure the orbit camera
+		var cam = this.orbit_cam = medea.CreateCameraNode("Orbit");
+		cam.ZNear(1);
+		cam.ZFar(10000);
+
+		var cc = this.orbit_cam_controller = new OrbitCamController(true,
+			INITIAL_CAM_PHI,
+			INITIAL_CAM_THETA);
+		cc.TerrainNode(this.terrain_root);
+		cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
+		cc.CameraDistance(INITIAL_ORBIT_CAM_DISTANCE);
+		cc.MaximumCameraDistance(MAX_ORBIT_CAM_DISTANCE);
+		cc.MinimumCameraDistance(RADIUS);
+		cc.Smoothing(true);
+		cc.SmoothSpeed(CAM_SMOOTH_SPEED);
+
+	    cam.AddEntity(cc);
+	    cam.Translate(vec3.scale([RADIUS, RADIUS, RADIUS], 1.8));
+	    this.root.AddChild(cam);
+
+		// Configure the ground-level FPS camera
+		var fps_cam = this.fps_cam = medea.CreateCameraNode("FPS");
+		fps_cam.ZNear(1);
+		fps_cam.ZFar(10000);
+		this.root.AddChild(fps_cam);
+
+		 var cc_fps = this.fps_cam_controller = new SphereFpsCamController();
+	    cc_fps.TerrainNode(this.terrain_root);
+		cc_fps.Enable();
+
+	    fps_cam.AddEntity(cc_fps);
+	   	cc_fps.PlaceNodeAt(fps_cam, [0.5, 1.0, 0.3]);
+
+	   	// Initially activate the Orbit camera
+	    this.viewport.Camera(cam);
+	},
+
+	_InitStars : function() {
+		this.dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
+		this.root.AddChild(this.dome_node);
+
+		// TODO: add star billboards
+	},
+
+	_InitSun : function() {
+		var light = this.light = medea.CreateNode();
+		var light_entity = this.light_entity = medea.CreateDirectionalLight([1,1,1]);
+		light.AddEntity(light_entity);
+		this.root.AddChild(light);
+
+		// Add the sun billboard
+		var sun_bb = this.sun_bb = medea.CreateBillboardNode('url:data/textures/sunsprite.png', false, true);
+		var sun = this.sun = this.root.AddChild(sun_bb);
+		sun.Scale(SUN_SIZE);
+
+		this.SetTimeOfDay(18.0);
+	},
+
+	_InitPlanet : function() {
+		this.root.AddChild(new AtmosphereNode(this.orbit_cam));
+		
+		var terrain_root = this.terrain_root = new SphericalTerrainNode();
+		this.root.AddChild(terrain_root);
+	},
 
 
+	/////////////////////////////////////////////////////////////////////////
+	// API for other modules
 
-// Invoked once the medea context (global |medea|) is ready to use
-function on_init_context(resources) {
-	console.log("Context created, setting up scene");
-	viewport = medea.CreateViewport();
-	viewport.ClearColor([0.0,0.0,0.0]);
-	
-	root = medea.RootNode();
+	// Get the scenegraph node that represents the entire sphere terrain.
+	// This is a |SphericalTerrainNode| instance
+	GetTerrainNode : function() {
+		return this.terrain_root;
+	},
 
-	var fps_view = false;
-	var orbit_ground_distance = 0;
+	// Get the medea.Image (lockable, all data in RAM) that holds
+	// height data for a particular heightmap index.
+	//
+	// cube_face_idx_to_heightmap_idx() maps from cube faces to
+	// heightmap indices.
+	GetHeightMap : function(heightmap_idx) {
+		return resources_preloaded['heightmap_' + heightmap_idx];
+	},
 
+	// Gets the tree map corresponding to a single heightmap index.
+	GetTreeMap : function(heightmap_idx) {
+		return resources_preloaded['treemap_' + heightmap_idx];
+	},
 
-	// Constructs a closure that caches invocations of f() for one frame
-	var CachePerFrame = function(f) {
-		var last_frame = -1;
-		var value = null;
-		return function() {
-			var frame = medea.GetStatistics().count_frames;
-			if (last_frame != frame) {
-				last_frame = frame;
-				value = f();
-			}
-			return value;
-		};
-	};
+	// Gets the estimated distance from the camera to the ground
+	GetGroundDistance : function() {
+		if (this.fps_view) {
+			return FPS_HEIGHT_OVER_GROUND;
+		}
+		return this.orbit_ground_distance;
+	},
 
-	// Application state. This is injected into all other modules, which
-	// use it to access global properties such as camera, location or
-	// preloaded shared resources such as heightmaps.
-	var app = {
+	// Get the world space position of the current active camera
+	GetCameraPosition : function() {
+		if (this.fps_view) {
+			return this.fps_cam.GetWorldPos();
+		}
+		return this.orbit_cam.GetWorldPos();
+	},
 
-		GetTerrainNode : function() {
-			return terrain_root;
-		},
+	// Get the camera position above the ground, taking into
+	// account the actual height of the terrain.
+	GetCameraPositionRelativeToGround : CachePerFrame(function() {
+		var vpos = app.GetCameraPosition();
+		var vlen = vec3.length(vpos); 
+		vec3.scale(vpos, (app.GetGroundDistance() + RADIUS) / vlen);
+		return vpos;
+	}),
 
-		// Get the medea.Image (lockable, all data in RAM) that holds
-		// height data for a particular heightmap index.
-		//
-		// cube_face_idx_to_heightmap_idx() maps from cube faces to
-		// heightmap indices.
-		GetHeightMap : function(heightmap_idx) {
-			return resources['heightmap_' + heightmap_idx];
-		},
+	// Get the actual height of the terrain below the camera (i.e.
+	// along the camera's UP axis)
+	GetTerrainHeightUnderCamera : CachePerFrame(function() {
+		return app.GetTerrainNode().GetHeightAt(app.GetCameraPosition());
+	}),
 
-		// Gets the tree map corresponding to a single heightmap index.
-		GetTreeMap : function(heightmap_idx) {
-			return resources['treemap_' + heightmap_idx];
-		},
+	// Get the(cubically) smoothed height of the terrain below
+	// the camera.
+	GetSmoothedTerrainHeightUnderCamera : CachePerFrame(function() {
+		return app.GetTerrainNode().GetSmoothedHeightAt(app.GetCameraPosition());
+	}),
 
-		// Gets the estimated distance from the camera to the ground
-		GetGroundDistance : function() {
-			if (fps_view) {
-				return FPS_HEIGHT_OVER_GROUND;
-			}
-			return orbit_ground_distance;
-		},
-
-		// Get the world space position of the current active camera
-		GetCameraPosition : function() {
-			if (fps_view) {
-				return cam_fps.GetWorldPos();
-			}
-			return cam.GetWorldPos();
-		},
-
-		GetCameraPositionRelativeToGround : CachePerFrame(function() {
-			var vpos = app.GetCameraPosition();
-			var vlen = vec3.length(vpos); 
-			vec3.scale(vpos, (app.GetGroundDistance() + RADIUS) / vlen);
-			return vpos;
-		}),
-
-		// Get the (scaled) height of the terrain below the camera (i.e.
-		// along the camera's UP axis)
-		GetTerrainHeightUnderCamera : CachePerFrame(function() {
-			return app.GetTerrainNode().GetHeightAt(app.GetCameraPosition());
-		}),
-
-		// Get a cubically smoothed terrain height value
-		GetSmoothedTerrainHeightUnderCamera : CachePerFrame(function() {
-			return app.GetTerrainNode().GetSmoothedHeightAt(app.GetCameraPosition());
-		}),
-
-		Get2DCoordinatesOnFaceUnderCamera : CachePerFrame(function() {
-			return app.GetTerrainNode().Get2DCoordinatesOnFace(app.GetCameraPosition());
-		}),
+	// Get the 2D coordinates (in 0 -)
+	Get2DCoordinatesOnFaceUnderCamera : CachePerFrame(function() {
+		return app.GetTerrainNode().Get2DCoordinatesOnFace(app.GetCameraPosition());
+	}),
 
 
-		IsFpsView : function(trafo) {
-			return fps_view;
-		},
+	IsFpsView : function(trafo) {
+		return this.fps_view;
+	},
 
-		SwitchToFpsView : function(trafo) {
-			if (fps_view) {
-				return;
-			}
-			fps_view = true;
-			cam_fps.LocalTransform(trafo);
-			viewport.Camera(cam_fps);
+	SwitchToFpsView : function(trafo) {
+		if (this.fps_view) {
+			return;
+		}
+		this.fps_view = true;
+		this.fps_cam.LocalTransform(trafo);
+		this.viewport.Camera(this.fps_cam);
 
-			console.log("Switching to FPS view");
-		},
+		console.log("Switching to FPS view");
+	},
 
-		/////////////////////////////////////////////////////////////////////////
+	GetTimeOfDay : function() {
+		return this.time_of_day;
+	},
 
-		_SetOrbitGroundDistance : function(d) {
-			orbit_ground_distance = d;
-		},
-	};
-	
-
-	var AtmosphereNode = InitAtmosphereNodeType(medea, app);
-	var SphericalTerrainNode = InitSphericalTerrainType(medea, app);
-	var OrbitCamController = GetOrbitCamControllerType(medea, app);
-	var SphereFpsCamController = GetSphereFpsCamControllerType(medea, app);
-	var GrassTile = InitGrassTileType(medea, app);
-	var DetailTreeNode = InitDetailTreeNodeType(medea, app);
-
-
-
-
-	var terrain_root = new SphericalTerrainNode();
-	root.AddChild(terrain_root);
-
-	var dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
-	root.AddChild(dome_node);
-
-	// And the orbit camera 
-	var cam = medea.CreateCameraNode("Orbit");
-	cam.ZNear(1);
-	cam.ZFar(10000);
-
-	var cc = new  OrbitCamController(true, INITIAL_CAM_PHI, INITIAL_CAM_THETA);
-	cc.TerrainNode(terrain_root);
-	cc.MouseStyle(medea.CAMCONTROLLER_MOUSE_STYLE_ON_LEFT_MBUTTON);
-	cc.CameraDistance(INITIAL_ORBIT_CAM_DISTANCE);
-	cc.MaximumCameraDistance(MAX_ORBIT_CAM_DISTANCE);
-	cc.MinimumCameraDistance(RADIUS);
-	cc.Smoothing(true);
-	cc.SmoothSpeed(CAM_SMOOTH_SPEED);
-
-    cam.AddEntity(cc);
-    cam.Translate(vec3.scale([RADIUS, RADIUS, RADIUS], 1.8));
-    root.AddChild(cam);
-
-	// Add the ground-level FPS camera
-	var cam_fps = medea.CreateCameraNode("FPS");
-	cam_fps.ZNear(1);
-	cam_fps.ZFar(10000);
-	root.AddChild(cam_fps);
-
-	//cam_fps.AddChild(mesh_parent);
-
-	cam_fps.AddChild(new GrassTile());
-	root.AddChild(new DetailTreeNode());
-
-    var cc_fps = new SphereFpsCamController();
-    cc_fps.TerrainNode(terrain_root);
-	cc_fps.Enable();
-
-    cam_fps.AddEntity(cc_fps);
-   	cc_fps.PlaceNodeAt(cam_fps, [0.5, 1.0, 0.3]);
-
-   	// Initially activate the Orbit camera
-    viewport.Camera(cam);
-
-	var light = medea.CreateNode();
-	var light_entity = medea.CreateDirectionalLight([1,1,1]);
-	light.AddEntity(light_entity);
-	root.AddChild(light);
-
-	var sun = null;
-
-	var time_of_day = -1;
-	var set_time_of_day = (function() {
+	// Set time of day relative to an arbitrary '0 AM' location.
+	// |tod| specifies the hour and is taken mod 24.
+	SetTimeOfDay : (function() {
 		var light_rotation_matrix = mat4.create();
 		var light_temp_dir = [0.0, 0.0, 0.0, 0.0];
 		var sun_rotation_axis = vec3.normalize([0.2, 1.0, 0.2]);
-		// make sure the initial light direction is orthogonal on the sun's rotation axis
+		// Make sure the initial light direction is orthogonal on the sun's rotation axis
 		var base_light_dir = vec3.normalize(vec3.cross(sun_rotation_axis, [0.0, 0.0, 1.0], vec3.create()));
 
 		return function(tod) {
-			time_of_day = tod;
+			tod = tod % 24.0;
+
+			this.time_of_day = tod;
 			mat4.identity(light_rotation_matrix);
 			mat4.rotate(light_rotation_matrix, tod * 3.1415 * 2.0 / 24.0, sun_rotation_axis);
 
@@ -225,69 +258,101 @@ function on_init_context(resources) {
 			mat4.multiplyVec4(light_rotation_matrix, [dir[0], dir[1], dir[2], 0.0], light_temp_dir);
 
 			vec3.normalize(light_temp_dir);
-	        light_entity.Direction([light_temp_dir[0], light_temp_dir[1], light_temp_dir[2]]);
+	        this.light_entity.Direction([light_temp_dir[0], light_temp_dir[1], light_temp_dir[2]]);
 
 	        vec3.scale(light_temp_dir, -SUN_DISTANCE);
-	        if (sun) {
-	        	sun.LocalPos(light_temp_dir);
+	        if (this.sun) {
+	        	this.sun.LocalPos(light_temp_dir);
 	        }
 	    };
-	})();
+	})(),
 
-	// Add the sun billboard
-	var sun = root.AddChild(medea.CreateBillboardNode('url:data/textures/sunsprite.png', false, true));
-	sun.Scale(SUN_SIZE);
 
-	set_time_of_day(18.0);
+	/////////////////////////////////////////////////////////////////////////
+	// Implementation
 
-	var input_handler = medea.CreateInputHandler();
-	medea.SetTickCallback(function(dtime) {
-		on_tick(dtime);
-
-		var SUN_MOVE_SPEED = 0.2;
-
+	// Called once per frame, |dtime| is the time delta in seconds since the last invocation
+	_Tick : function(dtime) {
 		// FPS/Ground view has a fixed sub and z range
-		if (app.IsFpsView()) {
-			var up = cam_fps.GetWorldYAxis();
-			var right = cam_fps.GetWorldXAxis();
+		// TODO: change this
+		if (this.IsFpsView()) {
+			var up = this.fps_cam.GetWorldYAxis();
+			var right = this.fps_cam.GetWorldXAxis();
 			vec3.lerp(up, right, 0.5);
 			vec3.normalize(up);
 			vec3.negate(up);
-			light_entity.Direction(up);
-			if (sun) {
-				sun.LocalPos(vec3.scale(up, SUN_DISTANCE));
+			this.light_entity.Direction(up);
+
+			if (this.sun) {
+				this.sun.LocalPos(vec3.scale(up, SUN_DISTANCE));
 			}
-			
-			return true;
+			return;
 		}
 		
-		// Orbit view has moving sun
-		if(input_handler.ConsumeKeyDown(medea.KeyCode.ENTER)) {
-			set_time_of_day((time_of_day + 0.5) % 24.0);
+		// Orbit view already supports moving sun
+		if(this.input_handler.ConsumeKeyDown(medea.KeyCode.ENTER)) {
+			this.SetTimeOfDay(this.GetTimeOfDay() + 0.5);
         }
         else if (auto_rotate_sun) {
-        	set_time_of_day((time_of_day + dtime * SUN_MOVE_SPEED) % 24.0);
+        	this.SetTimeOfDay(this.GetTimeOfDay() + dtime * SUN_MOVE_SPEED);
         }
 
-        // Update Z resolution based on the camera distance
-        var distance = vec3.length(cam.GetWorldPos());
+        // Update orbit camera Z planes.
+        // i)  We should always be able to see at least the entire planet + atmosphere + sun
+        // ii) Use a fixed 1:10000 ratio for the zplane distances
+        var distance = vec3.length(this.orbit_cam.GetWorldPos());
         distance *= 2.0;
-
-        // Must always be able to see at least the entire planet + atmosphere + sun
+        
         distance = Math.max((RADIUS + SUN_DISTANCE) * 1.01, distance);
-        cam.ZFar(distance);
+        this.orbit_cam.ZFar(distance);	        
+        this.orbit_cam.ZNear(distance / 10000);
+	},
 
-        // Use a fixed 1:10000 ratio for the zplane distance
-        cam.ZNear(distance / 10000);
+	// 
+	_SetOrbitGroundDistance : function(d) {
+		this.orbit_ground_distance = d;
+	},
+};
 
-        // Store the current camera height over the ground
-        global_camera_height = cc.camera_distance - RADIUS;
+
+
+///////////////////////////////////////////////////////////////////////////////////
+// Handler for medea initialization errors (i.e. WebGl not available)
+function on_init_error() {
+	console.log("Failed to create medea context");
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////
+// Handler for successful medea initialization
+// Invoked once the medea context (global |medea| object) is ready to use
+function on_init_context() {
+	console.log("Context created, setting up scene");
+	
+	// Initialize types from other modules, injecting both medea and
+	// the (yet uninitialized) app reference.
+	AtmosphereNode = InitAtmosphereNodeType(medea, app);
+	SphericalTerrainNode = InitSphericalTerrainType(medea, app);
+	OrbitCamController = GetOrbitCamControllerType(medea, app);
+	SphereFpsCamController = GetSphereFpsCamControllerType(medea, app);
+	GrassTile = InitGrassTileType(medea, app);
+	DetailTreeNode = InitDetailTreeNodeType(medea, app);
+	TerrainQuadTreeNode = InitTerrainQuadTreeType(medea, app);
+	WaterTile = InitWaterTileType(medea, app);
+	TerrainTile = InitTerrainTileType(medea, app);
+	TreeTile = InitTreeTileType(medea, app);
+
+	// Now perform actual initialization and dispatch ticks to app.
+	console.log("Starting app initialization");
+	app.Init();
+
+	console.log("Setting up tick callbacks (main loop)");
+	medea.SetTickCallback(function(dtime) {
+		app._Tick(dtime);
 		return true;
 	});	
 
-	root.AddChild(new AtmosphereNode(cam));
-
-
+	console.log("Setting up debug panels");
 	medea.SetDebugPanel(null, function() {
 		var f1 = medea.debug_panel.gui.addFolder('Terrain');
 		f1.add(this, 'lod_attenuation');
@@ -300,49 +365,34 @@ function on_init_context(resources) {
 	medea.Start();
 }
 
+
+///////////////////////////////////////////////////////////////////////////////////
+// Entry point. Initializes medea, preloads critical resources and then
+// dispatches to either |on_init_context| or  |on_init_error|.
 function run() {
-	var deps = [
-		'input',
-		'material',
-		'standardmesh',
-		'forwardrenderer',
-		'light',
-		'debug',
-		'terraintile',
-		'sceneloader',
-		'input_handler',
-		'keycodes',
-		'skydome',
-		'billboard',
-		'camcontroller',
-		'skybox'
+	// 
+	var deps = ['input', 'material', 'standardmesh', 'forwardrenderer', 'light', 'debug', 'terraintile',
+		'sceneloader','input_handler','keycodes','skydome','billboard','camcontroller', 'skybox'
 	];
+
+	console.log("Creating medea context");
 	medealib.CreateContext('game_container', {dataroot: '../medea/data'}, deps, function(_medea) {
-		
 		// We only create one medea instance so make it global
 		medea = _medea;
 
-		// List of images that are always loaded upfront
-		var resources = {
-			'heightmap_0' : 'url:data/textures/heightmap0.png',
-			'heightmap_1' : 'url:data/textures/heightmap1.png',
-			'treemap_0' : 'url:data/textures/treemap.png',
-			'treemap_1' : 'url:data/textures/treemap.png',
-		};
-
-		var images = {
-		};
-
+		// Preload images that are critical for rendering the first frame
 		var countdown = 0;
-		for (var k in resources) {
+		for (var k in resources_preloaded) {
 			++countdown;
 		}
-		for (var k in resources) {
-			medea.CreateImage(resources[k], (function(k) {
+
+		console.log("Preloading flight-critical resources");
+		for (var k in resources_preloaded) {
+			medea.CreateImage(resources_preloaded[k], (function(k) {
 				return function(img) {
-					images[k] =  img;
+					resources_preloaded[k] =  img;
 					if (--countdown === 0) {
-						on_init_context(images);
+						on_init_context();
 					}
 				};
 			})(k))

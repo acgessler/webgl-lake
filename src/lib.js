@@ -3,6 +3,21 @@
 // to a valid medea context. To use with multiple contexts, this will
 // require refactoring.
 
+
+
+// List of images that are always loaded upfront before any other initialization
+// occurs. This list includes images resources that are crucial for rendering
+// the first frame.
+//
+// The resourc objects are stored in the dictionary values directly.
+var resources_preloaded = {
+	'heightmap_0' : 'url:data/textures/heightmap0.png',
+	'heightmap_1' : 'url:data/textures/heightmap1.png',
+	'treemap_0' : 'url:data/textures/treemap.png',
+	'treemap_1' : 'url:data/textures/treemap.png',
+};
+
+
 // Return the prototype mesh for drawing a terrain surface with VTF-based
 // height (i.e the mesh is a flat grid with y==0). This mesh
 // is never used for drawing, but tiles use CloneMesh()
@@ -20,6 +35,10 @@ var get_prototype_terrain_mesh = medealib.Cached(function() {
 	return mesh;
 });
 
+
+// Get the terrain heightmap texture for a given heightmap index.
+// Use |cube_face_idx_to_heightmap_idx| to convert from face indices
+// to heightmap indexes.
 var get_terrain_heightmap = function(heightmap_idx) {
 	return medea.CreateTexture('url:data/textures/heightmap' + heightmap_idx + '.png', null,
 		// We don't need MIPs for the heightmap anyway
@@ -33,9 +52,10 @@ var get_terrain_heightmap = function(heightmap_idx) {
 		medea.TEXTURE_FORMAT_LUM);
 };
 
+
 // Return the prototype material for drawing terrain. This material
 // is never used for drawing, but terrain tiles use CloneMaterial()
-// to get independent copies.
+// to get independent copies of the prototype.
 var get_prototype_terrain_material = (function() {
 	var terrain_materials = {};
 	return function(cube_face_idx) {
@@ -95,9 +115,10 @@ var get_prototype_terrain_material = (function() {
 	};
 })();
 
+
 // Return the prototype material for drawing water. This material
 // is never used for drawing, but water tiles use CloneMaterial()
-// to get independent copies.
+// to get independent copies of the prototype.
 var get_prototype_water_material = (function() {
 	var water_materials = {};
 	return function(cube_face_idx) {

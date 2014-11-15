@@ -1,7 +1,14 @@
 
+var TREE_TYPE_PINE = 0;
+var TREE_TYPE_REGULAR = 1;
+
 function InitDetailTreeNodeType(medea, app) {
 
-	// Load both detail tree meshes asynchronously
+	// Schedule loading trees first
+	// For each TREE_TYPE, a list of variants which usually only differ in texture
+	var tree_prototypes = [[], []];
+
+
 	var loaded_tree = false;
 	var tree_prototype = medea.CreateNode();
 	medea.LoadSceneFromResource('url:data/meshes/tree5.json', tree_prototype, null, function(st) {
