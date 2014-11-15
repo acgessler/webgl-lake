@@ -1,6 +1,6 @@
 var InitSphericalTerrainType = function(medea, app) {
 
-
+	// Canonical axes
 	var axes = [
 		[1, 0, 0],
 		[0, 1, 0],
@@ -10,14 +10,13 @@ var InitSphericalTerrainType = function(medea, app) {
 	// Terrain root node.
 	//
 	// Holds six cube faces, each of which is a 2D adaptive quad tree (TerrainQuadTreeNode). 
-	// Provide infrastructure to transform the six faces to form a seamless sphere and
-	// to determine the height over ground of an arbitrary camera position.
+	// Provides infrastructure to transform the six faces to form a seamless sphere and
+	// for determining the height over ground of an arbitrary camera position.
 	//
-	// (Vertices are actually transformed in the quadtree leaf shaders, and TerrainQuadTreeNode
-	//  furthermore knows that it is used as a sphere face s.t it can set its own BB correctly)
+	// (TerrainQuadTreeNode knows that it is used as a sphere face and sets its
+	//  own BB correctly)
 	var SphericalTerrainNode = medea.Node.extend({
 
-		terrain_data : null,
 		faces : null,
 		node_mask : null,
 
@@ -62,7 +61,7 @@ var InitSphericalTerrainType = function(medea, app) {
 			// Add a separate child that will mask the sphere shape in the
 			// stencil buffer. The shaders for the terrain cube faces then
 			// use this mask to ensure that high mountains do not overlap
-			// the atmosphere.
+			// the atmosphere in orbital views.
 			var mat_mask = medea.CreateSimpleMaterialFromShaderPair('url:data/shader/mask');
 			var state = mat_mask.Pass(0).State();
 			state.color_mask = [false, false, false, false];
@@ -87,7 +86,7 @@ var InitSphericalTerrainType = function(medea, app) {
 			return this.faces[face_idx];
 		},
 
-
+		// Medea render 
 		Render : function(camera, rqmanager) {
 			this._super();
 			
@@ -125,7 +124,6 @@ var InitSphericalTerrainType = function(medea, app) {
 			}
 			return max_i;
 		},
-
 
 		// For a given world-space position |v| find the world-space positions
 		// of all trees anchors within |radius| on the surface (approximately)
@@ -182,14 +180,12 @@ var InitSphericalTerrainType = function(medea, app) {
 					}
 				}
 			}
-
 			return trees;
 		},
 
-
 		// For a given world-space position find the sphere face that is below
 		// it under an orthogonal projection and within that face determine
-		// the 2D coordinates of the camera
+		// the 2D coordinates of the camera in heightmap coordinates.
 		Get2DCoordinatesOnFace : function(v) {
 			var v_norm = vec3.normalize(v, vec3.create());
 
@@ -210,7 +206,6 @@ var InitSphericalTerrainType = function(medea, app) {
 
 			return [v_norm[0] - TERRAIN_PLANE_OFFSET, v_norm[2] - TERRAIN_PLANE_OFFSET];
 		},
-
 
 		// Get the height (measured from a sphere with r=RADIUS) of the terrain under
 		// any given point.
@@ -240,7 +235,6 @@ var InitSphericalTerrainType = function(medea, app) {
 				v_norm[2] - TERRAIN_PLANE_OFFSET);
 			return height;
 		},
-
 
 		// Get a gaussian smoothed height value for the terrain under a given point.
 		//

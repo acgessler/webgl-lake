@@ -100,6 +100,10 @@ var InitAtmosphereNodeType = function(medea, app) {
 				vec3.cross(pos, eye, right);
 				vec3.cross(right, pos, eye);
 
+				vec3.normalize(right);
+				vec3.normalize(pos);
+				vec3.normalize(eye);
+
 				this.LocalXAxis(right);
 				this.LocalYAxis(pos);
 				this.LocalZAxis(eye);

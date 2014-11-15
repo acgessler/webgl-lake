@@ -146,7 +146,7 @@ var app = {
 	},
 
 	_InitPlanet : function() {
-		this.root.AddChild(new AtmosphereNode(this.orbit_cam));
+		this.root.AddChild(new AtmosphereNode());
 		
 		var terrain_root = this.terrain_root = new SphericalTerrainNode();
 		this.root.AddChild(terrain_root);
@@ -308,7 +308,7 @@ var app = {
         this.orbit_cam.ZNear(distance / 10000);
 	},
 
-	// 
+	// Set new global distance from orbit to ground
 	_SetOrbitGroundDistance : function(d) {
 		this.orbit_ground_distance = d;
 	},

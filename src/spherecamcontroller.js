@@ -34,6 +34,7 @@ var GetSphereFpsCamControllerType = function(medea, app) {
 			//node.LocalZAxis(vec3.cross(node.LocalXAxis(), node.LocalYAxis()));
 		},
 
+
 		PlaceNodeAt : function(node, v) {
 			var pos_nor = vec3.normalize(v);
 
@@ -72,7 +73,6 @@ var GetSphereFpsCamControllerType = function(medea, app) {
 			
 
 		ProcessKeyboard : function(dtime, n) {
-
 			var ws = this.walk_speed;
 			if(this.hispeed_on_shift) {
 				if(medea.IsKeyDown(16) /* SHIFT */) {
