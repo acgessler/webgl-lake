@@ -20,7 +20,7 @@ uniform float terrain_height_under_cam;
 
 
 const float kMIN_LOD = 0.0;
-const float kMAX_LOD = 8.0;
+const float kMAX_LOD = 6.0;
 
 const float kLOD_BASE_UNIT = 64.0;
 const float kSQ_LOD_BASE_UNIT = kLOD_BASE_UNIT * kLOD_BASE_UNIT;

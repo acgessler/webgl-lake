@@ -17,8 +17,7 @@ function log2(x) {
 // Must keep in sync with terrain.vs
 function calc_clod(sq_distance) {
 	var log_distance = log2(sq_distance / (64.0 * 64.0)) * 0.5 * lod_attenuation;
-	return Math.max(0, Math.min(COUNT_LOD_LEVELS - 1,
-		log_distance));
+	return clamp(0, COUNT_LOD_LEVELS - 1, log_distance);
 }
 
 

@@ -154,13 +154,11 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			this.x = x | 0;
 			this.y = y | 0;
 			this.w = w === undefined ? 1 : w;
-			// TODO: get rid of 'h' everywhere. We only use square sizes.
-			this.h = w;
 			this.is_back = is_back;
 			this.cube_face_idx = cube_face_idx;
 
 			if (this.w === TILE_COUNT) {
-				this.AddChild(new WaterTile(this.x, this.y, this.w, this.h, cube_face_idx));
+				this.AddChild(new WaterTile(this.x, this.y, this.w, this.w, cube_face_idx));
 				this.AddChild(new TreeTile(this.x, this.y, this.w, cube_face_idx));
 			}
 
@@ -235,7 +233,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				this.y * TILE_SIZE]);
 			var b = vec3.create([(this.x + this.w) *  TILE_SIZE,
 				 height_min_max[1] * TERRAIN_HEIGHT_SCALE,
-				 (this.y + this.h) *  TILE_SIZE]);
+				 (this.y + this.w) *  TILE_SIZE]);
 
 			// The static BB we set is given in local space. Two transformations get
 			// later applied to it:
@@ -334,6 +332,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 			var scratch = vec3.create();
 			return function(camera, rqmanager) {
+				this._UpdateWorldSpaceCorners();
 				var cam_pos = camera.GetWorldPos();
 			
 				var bb = this.GetWorldBB();
@@ -395,7 +394,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				// To be able to render at this level of the tree, the difference in LOD
 				// between any two corners may be at most 1 or discontinuities will occur.
 				//
-				// Brackets:
 				//  - The maximum LOD of a tile is found at one of the corners
 				//  - The minimum LOD of a tile is found at the point
 				//    that is closest to the camera. This point must be an edge point
@@ -435,8 +433,11 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				clod_min = Math.floor(clod_min);
 
 				var clod_delta = clod_max - clod_min;
-				var can_satisfy_lod = clod_min - this.node_lod_level >= 0;
-				if ((clod_delta > 1.0 || !can_satisfy_lod) && can_subdivide) {
+
+				var can_satisfy_lod = (clod_min - this.node_lod_level) >= 0;
+				// |clod_delta| > 1.0 can cause cracks, but not subdividing saves batches.
+				// Thus, avoid only if close to the camera (i.e. low LOD)
+				if ((!can_satisfy_lod || (clod_delta > 1.0 && clod_min <= 1)) && can_subdivide) {
 					this._Subdivide();
 				}
 				else {
@@ -482,7 +483,6 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			var zero = [0, 0, 0];
 			return function(cam_pos) {
 				var norm = vec3.normalize(vec3.create(cam_pos));
-				this._UpdateWorldSpaceCorners();
 
 				var count_negative = 0;
 				for (var i = 0; i < 4; ++i) {
@@ -528,11 +528,12 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 		_Subdivide : function() {
 			var sub_quads = this.sub_quads;
-			if (sub_quads == null) {
+			if (sub_quads === null) {
 				sub_quads = this.sub_quads = new Array(4);
 				var x = this.x;
 				var y = this.y;
 				var w = this.w / 2;
+
 				var is_back = this.is_back;
 				var cube_face_idx = this.cube_face_idx;
 				sub_quads[0] = new TerrainQuadTreeNode(x    , y    , w, is_back, cube_face_idx);
@@ -558,7 +559,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 
 		_RenderAsSingleTile : function(clod_min) {
 			if (this.draw_tile === null) {
-				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.h, this.is_back, this.cube_face_idx);
+				this.draw_tile = new TerrainTile(this.x, this.y, this.w, this.w, this.is_back, this.cube_face_idx);
 				this.AddChild(this.draw_tile);
 			}
 

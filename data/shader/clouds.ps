@@ -28,7 +28,7 @@ void main()
     float lighting = max(0.0, dot(LIGHT_D0_DIR, normalize(skew_normal))) + base_lighting;
 
     vec2 sq_lighting = sqrt(vec2(lighting, base_lighting));
-    gl_FragColor.rgb = sq_lighting.xxx * color.b * 0.85;
+    gl_FragColor.rgb = sq_lighting.xxx * color.b * 0.95;
 
     // Alpha-test to make the cloud boundaries appear a bit sharper
     if (color.r < 0.18) {

@@ -4,7 +4,7 @@
 // Technically most of them could be made uniforms and passed to
 // shaders at runtime, but it significantly decreases shader
 // performance and comes at higher CPU overhead.
-var COUNT_LOD_LEVELS = 9;
+var COUNT_LOD_LEVELS = 7;
 var TILE_SIZE = 64;
 var TERRAIN_PLANE_WIDTH = 2048;
 var TILE_COUNT = TERRAIN_PLANE_WIDTH / TILE_SIZE;
