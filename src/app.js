@@ -328,6 +328,7 @@ function on_init_error() {
 // Handler for successful medea initialization
 // Invoked once the medea context (global |medea| object) is ready to use
 function on_init_context() {
+	var canvas = document.getElementById('game_container');
 	console.log("Context created, setting up scene");
 	
 	// Initialize types from other modules, injecting both medea and
@@ -350,6 +351,13 @@ function on_init_context() {
 
 	console.log("Setting up tick callbacks (main loop)");
 	medea.SetTickCallback(function(dtime) {
+		var width = canvas.clientWidth;
+		var height = canvas.clientHeight;
+		if (canvas.width !== width || canvas.height !== height) {
+	   		canvas.width = width;
+	   		canvas.height = height;
+	   	}
+	   	
 		app._Tick(dtime);
 		return true;
 	});	
@@ -362,7 +370,7 @@ function on_init_context() {
 		var f2 = medea.debug_panel.gui.addFolder('Sun');
 		f2.add(this, 'auto_rotate_sun');
 	});
-    
+
     console.log("Starting main loop");
 	medea.Start();
 }

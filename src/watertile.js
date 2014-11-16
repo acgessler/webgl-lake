@@ -37,6 +37,7 @@ var InitWaterTileType = function(medea, app) {
 			});
 
 			pass.CullFace(false);
+			pass.DepthWrite(true);
 
 			var water_mesh = medea.CloneMesh(get_prototype_terrain_mesh(), water_material);
 			// The terrain mesh is a LOD mesh, but water gets drawn at LOD0
