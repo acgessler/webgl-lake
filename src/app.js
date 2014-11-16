@@ -19,6 +19,7 @@ var TerrainQuadTreeNode;
 var WaterTile;
 var TerrainTile;
 var TreeTile;
+var StarsNode;
 
 // Constructs a closure that caches invocations of f() for one frame
 var CachePerFrame = function(f) {
@@ -61,6 +62,8 @@ var app = {
 	light_entity : null,
 	sun : null,
 	time_of_day : -1,
+
+	stars : null,
 
 	input_handler : null,
 
@@ -125,10 +128,8 @@ var app = {
 	},
 
 	_InitStars : function() {
-		this.dome_node = medea.CreateSkyboxNode('url:data/textures/skybox.png');
-		this.root.AddChild(this.dome_node);
-
-		// TODO: add star billboards
+		this.stars = new StarsNode();
+		this.root.AddChild(this.stars);
 	},
 
 	_InitSun : function() {
@@ -341,6 +342,7 @@ function on_init_context() {
 	WaterTile = InitWaterTileType(medea, app);
 	TerrainTile = InitTerrainTileType(medea, app);
 	TreeTile = InitTreeTileType(medea, app);
+	StarsNode = InitStarsNodeType(medea, app);
 
 	// Now perform actual initialization and dispatch ticks to app.
 	console.log("Starting app initialization");
