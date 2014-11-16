@@ -17,32 +17,32 @@ var InitSphericalTerrainType = function(medea, app) {
 	//  own BB correctly)
 	var SphericalTerrainNode = medea.Node.extend({
 
-		faces : null,
+		face_anchors : null,
 		node_mask : null,
 
 		init : function() {
 			this._super();
 
 			this.AddChild(new DetailTreeNode());
-			this.faces = new Array(6);
+			this.face_anchors = new Array(6);
 
 			for (var i = 0; i < 6; ++i) {
 				var is_back = i >= 3;
-				var plane = new TerrainQuadTreeNode(0, 0, TILE_COUNT, is_back, i);
-				plane.Translate([TERRAIN_PLANE_OFFSET, 0, TERRAIN_PLANE_OFFSET]);
-				var plane_anchor = medea.CreateNode();
+				var face = new TerrainQuadTreeNode(0, 0, TILE_COUNT, is_back, i);
+				face.Translate([TERRAIN_PLANE_OFFSET, 0, TERRAIN_PLANE_OFFSET]);
+				var face_anchor = medea.CreateNode();
 				
-				plane_anchor.Rotate(Math.PI * 0.5, axes[i % 3]);
+				face_anchor.Rotate(Math.PI * 0.5, axes[i % 3]);
 
 				// Hardcoded hacks to rotate the patches to be seamless
 				if (i === 1) {
-					plane_anchor.Rotate(Math.PI * -0.5, axes[1]);
+					face_anchor.Rotate(Math.PI * -0.5, axes[1]);
 				}
 				else if (i === 2) {
-					plane_anchor.Rotate(Math.PI * -0.5, axes[1]);
+					face_anchor.Rotate(Math.PI * -0.5, axes[1]);
 				}
 				else if (i === 5) {
-					plane_anchor.Rotate(Math.PI * -0.5, axes[1]);
+					face_anchor.Rotate(Math.PI * -0.5, axes[1]);
 				}
 
 				if ( is_back ) {
@@ -50,12 +50,12 @@ var InitSphericalTerrainType = function(medea, app) {
 					// still the same, so we don't need to change culling
 					// settings. This need to be taken into account when
 					// creating the terrain image data though.
-					plane_anchor.Scale([-1, -1, 1]);
+					face_anchor.Scale([-1, -1, 1]);
 				}
-				plane_anchor.Translate([0, RADIUS, 0]);
-				plane_anchor.AddChild(plane);
-				this.AddChild(plane_anchor);
-				this.faces[i] = plane;
+				face_anchor.Translate([0, RADIUS, 0]);
+				face_anchor.AddChild(face);
+				this.AddChild(face_anchor);
+				this.face_anchors[i] = face_anchor;
 			}
 
 			// Add a separate child that will mask the sphere shape in the
@@ -83,7 +83,12 @@ var InitSphericalTerrainType = function(medea, app) {
 
 		// Gets the root TerrainQuadTreeNode for each face
 		GetFace : function(face_idx) {
-			return this.faces[face_idx];
+			return this.face_anchors[face_idx].children[0];
+		},
+
+		// Gets the root TerrainQuadTreeNode for each face
+		GetFaceAnchor : function(face_idx) {
+			return this.face_anchors[face_idx];
 		},
 
 		// Medea render 
@@ -111,11 +116,11 @@ var InitSphericalTerrainType = function(medea, app) {
 		// Given an unit vector |v|, find the index of the cube face that
 		// corresponds to it.
 		FindFaceIndexForUnitVector : function(v) {
-			var children = this.children;
+			var face_anchors = this.face_anchors;
 			var max_i = 0;
 			var max_dot = 0;
 			for (var i = 0; i < 6; ++i) {
-				var axis = vec3.normalize(children[i].GetWorldYAxis());
+				var axis = vec3.normalize(face_anchors[i].GetWorldYAxis());
 				var dot = vec3.dot(axis, v);
 				if (i === 0 || dot > max_dot) {
 					max_i = i;
@@ -164,13 +169,13 @@ var InitSphericalTerrainType = function(medea, app) {
 					if (data[(y * w + x) * 4] === 0) {
 						// This is a tree, find the height under it and emit
 						// the world-space position of the tree anchor.
-						var plane_anchor = this.children[face_idx];
-						var height = plane_anchor.children[0].GetHeightAt(x * size_ratio, y * size_ratio);
+						var face_anchor = this.GetFaceAnchor(face_idx);
+						var height = face_anchor.children[0].GetHeightAt(x * size_ratio, y * size_ratio);
 
 						var x_offset = (x * size_ratio) + TERRAIN_PLANE_OFFSET;
 						var y_offset = (y * size_ratio) + TERRAIN_PLANE_OFFSET;
 
-						var trafo = plane_anchor.GetGlobalTransform();
+						var trafo = face_anchor.GetGlobalTransform();
 						var v = vec3.create([x_offset, RADIUS, y_offset]);
 						transform_vector(trafo, v);
 						vec3.normalize(v);
@@ -194,14 +199,14 @@ var InitSphericalTerrainType = function(medea, app) {
 
 			// Transform the vector into the local coordinate space
 			// of the correct face (which goes from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
-			// on each axis, with 0,0,0 being the center of the plane)
-			var plane_anchor = this.children[face_idx];
-			var trafo = plane_anchor.GetInverseGlobalTransform();
+			// on each axis, with 0,0,0 being the center of the face)
+			var face_anchor = this.GetFaceAnchor(face_idx);
+			var trafo = face_anchor.GetInverseGlobalTransform();
 
 			transform_vector(trafo, v_norm);
 			vec3.normalize(v_norm);
 
-			// Project from sphere coordinates onto the flat plane for the face
+			// Project from sphere coordinates onto the flat face for the face
 			vec3.scale(v_norm, RADIUS / v_norm[1]);
 
 			return [v_norm[0] - TERRAIN_PLANE_OFFSET, v_norm[2] - TERRAIN_PLANE_OFFSET];
@@ -219,18 +224,18 @@ var InitSphericalTerrainType = function(medea, app) {
 
 			// Transform the vector into the local coordinate space
 			// of the correct face (which goes from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
-			// on each axis, with 0,0,0 being the center of the plane)
-			var plane_anchor = this.children[face_idx];
-			var trafo = plane_anchor.GetInverseGlobalTransform();
+			// on each axis, with 0,0,0 being the center of the face)
+			var face_anchor = this.GetFaceAnchor(face_idx);
+			var trafo = face_anchor.GetInverseGlobalTransform();
 
 			transform_vector(trafo, v_norm);
 			vec3.normalize(v_norm);
 
-			// Project from sphere coordinates onto the flat plane for the face
+			// Project from sphere coordinates onto the flat face for the face
 			vec3.scale(v_norm, RADIUS / v_norm[1]);
 
 			// Now this is a 2D problem, recurse into the quadtree to get a response
-			var height = plane_anchor.children[0].GetHeightAt(
+			var height = face_anchor.children[0].GetHeightAt(
 				v_norm[0] - TERRAIN_PLANE_OFFSET,
 				v_norm[2] - TERRAIN_PLANE_OFFSET);
 			return height;
@@ -271,14 +276,14 @@ var InitSphericalTerrainType = function(medea, app) {
 
 				// Transform the vector into the local coordinate space
 				// of the correct face (which is from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
-				// on each axis, with 0,0,0 being the center of the plane)
-				var plane_anchor = this.children[face_idx];
-				var trafo = plane_anchor.GetInverseGlobalTransform();
+				// on each axis, with 0,0,0 being the center of the face)
+				var face_anchor = this.GetFaceAnchor(face_idx);
+				var trafo = face_anchor.GetInverseGlobalTransform();
 
 				transform_vector(trafo, v_norm);
 				vec3.normalize(v_norm);
 
-				// Project from sphere coordinates onto the flat plane for the face
+				// Project from sphere coordinates onto the flat face for the face
 				vec3.scale(v_norm, RADIUS / v_norm[1]);
 
 				var x_sample_pos = v_norm[0] - TERRAIN_PLANE_OFFSET;
@@ -289,7 +294,7 @@ var InitSphericalTerrainType = function(medea, app) {
 				var smoothed_height = 0.0;
 				for (var j = -range, cursor = 0; j <= range; ++j) {
 					for (var k = -range; k <= range; ++k, ++cursor) {
-						smoothed_height += gauss_coeffs[cursor] * plane_anchor.children[0].GetHeightAt(
+						smoothed_height += gauss_coeffs[cursor] * face_anchor.children[0].GetHeightAt(
 							x_sample_pos +  SAMPLE_DELTA * j,
 							y_sample_pos +  SAMPLE_DELTA * k
 						);

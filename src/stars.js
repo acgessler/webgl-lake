@@ -8,7 +8,7 @@ var InitStarsNodeType = function(medea, app) {
 			this.AddChild(this.dome_node);
 
 			this.EnabledIf(function() {
-				return true;
+				return !app.IsFpsView();
 			});
 		}
 	});

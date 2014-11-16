@@ -4,7 +4,6 @@ var InitGrassTileType = function(medea, app) {
 
 	var GrassTile = medea.Node.extend({
 		mesh : null,
-		active : false,
 
 		init : function(x) {
 			this._super();
@@ -105,24 +104,16 @@ var InitGrassTileType = function(medea, app) {
 			pass.CullFace(false);
 
 			mesh.RenderQueue(medea.RENDERQUEUE_ALPHA_LATE);
-			this.SetStaticBB(medea.BB_INFINITE);
-		},
 
-		Render : function(camera, rqmanager) {
-			this._super(camera, rqmanager);
-			var height_over_ground = app.GetGroundDistance();
-			// Do not bother rendering grass if the camera is too far away
-			// s.t. it would render at full transparency
-			var new_active = height_over_ground < GRAS_FADE_END * 1.5;
-			if (new_active != this.active) {
-				this.active = new_active;
-				if(new_active) {
-					this.AddEntity(this.mesh);
-				}
-				else {
-					this.RemoveEntity(this.mesh);
-				}
-			}
+			this.AddEntity(mesh);
+			this.SetStaticBB(medea.BB_INFINITE);
+
+			this.EnabledIf(function() {
+				var height_over_ground = app.GetGroundDistance();
+				// Do not bother rendering grass if the camera is too far away
+				// s.t. it would render at full transparency
+				return true; //height_over_ground < GRAS_FADE_END * 1.5;
+			});
 		},
 	});
 

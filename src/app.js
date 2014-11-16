@@ -116,7 +116,7 @@ var app = {
 		fps_cam.ZFar(10000);
 		this.root.AddChild(fps_cam);
 
-		 var cc_fps = this.fps_cam_controller = new SphereFpsCamController();
+		var cc_fps = this.fps_cam_controller = new SphereFpsCamController();
 	    cc_fps.TerrainNode(this.terrain_root);
 		cc_fps.Enable();
 
