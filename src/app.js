@@ -185,12 +185,17 @@ var app = {
 		return this.orbit_ground_distance;
 	},
 
+	// Get the current active camera node
+	GetActiveCamera : function() {
+		if (this.fps_view) {
+			return this.fps_cam;
+		}
+		return this.orbit_cam;
+	},
+
 	// Get the world space position of the current active camera
 	GetCameraPosition : function() {
-		if (this.fps_view) {
-			return this.fps_cam.GetWorldPos();
-		}
-		return this.orbit_cam.GetWorldPos();
+		return app.GetActiveCamera().GetWorldPos();
 	},
 
 	// Get the camera position above the ground, taking into
@@ -214,9 +219,27 @@ var app = {
 		return app.GetTerrainNode().GetSmoothedHeightAt(app.GetCameraPosition());
 	}),
 
-	// Get the 2D coordinates (in 0 -)
+	// Get the 2D coordinates
 	Get2DCoordinatesOnFaceUnderCamera : CachePerFrame(function() {
 		return app.GetTerrainNode().Get2DCoordinatesOnFace(app.GetCameraPosition());
+	}),
+
+	Get2DDirectionOnFaceUnderCamera : CachePerFrame(function() {
+		var cam_pos = app.GetCameraPosition();
+		var cam_dir = app.GetActiveCamera().GetWorldZAxis();
+		vec3.add(cam_pos, cam_dir, cam_dir);
+
+		var terrain_node = app.GetTerrainNode();
+		var v0 = terrain_node.Get2DCoordinatesOnFace(cam_pos);
+		var v1 = terrain_node.Get2DCoordinatesOnFace(cam_dir);
+
+		v1[0] -= v0[0];
+		v1[1] -= v0[1];
+
+		var v_norm = 1.0 / (v1[0] * v1[0] + v1[1] * v1[1]);
+		v1[0] *= v_norm;
+		v1[1] *= v_norm;
+		return v1;
 	}),
 
 
@@ -357,7 +380,7 @@ function on_init_context() {
 	   		canvas.width = width;
 	   		canvas.height = height;
 	   	}
-	   	
+
 		app._Tick(dtime);
 		return true;
 	});	
