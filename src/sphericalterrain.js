@@ -190,16 +190,14 @@ var InitSphericalTerrainType = function(medea, app) {
 
 		// For a given world-space position find the sphere face that is below
 		// it under an orthogonal projection and within that face determine
-		// the 2D coordinates of the camera in heightmap coordinates.
+		// the equivalent of |v| in heightmap coordinates.
 		Get2DCoordinatesOnFace : function(v) {
 			var v_norm = vec3.normalize(v, vec3.create());
 
 			// Find out which side to look at
 			var face_idx = this.FindFaceIndexForUnitVector(v_norm);
 
-			// Transform the vector into the local coordinate space
-			// of the correct face (which goes from TERRAIN_PLANE_OFFSET to -TERRAIN_PLANE_OFFSET
-			// on each axis, with 0,0,0 being the center of the face)
+			// Transform the vector into the local coordinate space of the face
 			var face_anchor = this.GetFaceAnchor(face_idx);
 			var trafo = face_anchor.GetInverseGlobalTransform();
 
