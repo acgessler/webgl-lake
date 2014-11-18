@@ -113,7 +113,7 @@ var app = {
 		// Configure the ground-level FPS camera
 		var fps_cam = this.fps_cam = medea.CreateCameraNode("FPS");
 		fps_cam.ZNear(1);
-		fps_cam.ZFar(10000);
+		fps_cam.ZFar(RADIUS * 0.5);
 		this.root.AddChild(fps_cam);
 
 		var cc_fps = this.fps_cam_controller = new SphereFpsCamController();

@@ -56,6 +56,8 @@ function InitDetailTreeNodeType(medea, app) {
 
 	var DETAIL_TREE_UPDATE_THRESHOLD_SQ = DETAIL_TREE_UPDATE_THRESHOLD * DETAIL_TREE_UPDATE_THRESHOLD;
 
+	var tree_node_caches = {};
+
 	var DetailTreeNode = medea.Node.extend({
 		x : 0,
 		y : 0,
@@ -90,9 +92,14 @@ function InitDetailTreeNodeType(medea, app) {
 
 			// If so, discard all children and re-attach all active detail trees
 			this.last_update_cam_world_pos = cam_world_pos;
+
+			this.children.forEach(function(child) {
+				var i = child.reclaim_to_cache;
+				(tree_node_caches[i] = tree_node_caches[i] || []).push(child);
+			});
 			this.RemoveAllChildren();
 
-			var tree_radius = TREE_BILLBOARD_FADE_END * 1.2;
+			var tree_radius = TREE_BILLBOARD_FADE_END;
 			var tree_radius_sq = tree_radius * tree_radius;
 
 			var trees = app.GetTerrainNode().GetTreesInRadius(cam_world_pos, tree_radius);
@@ -100,67 +107,92 @@ function InitDetailTreeNodeType(medea, app) {
 				var tree_pos = trees[i];
 
 				vec3.subtract(cam_world_pos, tree_pos, scratch);
-				if (vec3.dot(scratch, scratch) > tree_radius_sq) {
+				if (vec3.dot(scratch, scratch) >= tree_radius_sq) {
 					continue;
 				}
 
-				var tree_node = medea.CreateNode();
+				// Derive a stable coordinate system based on the position of the
+				// tree on the sphere, adding high-frequency noise to have trees
+				// appear locally random.
+				var noise = this._GenTreeNoise(tree_pos);
+
+				// Select the tree type
+				// TODO: further select tree variant
+				var tree_type = noise > 1024 ? 1 : 0;
+
+				// Re-use a node from tree node cache if possible. Cloning trees
+				// is "cheap" (shallow copy of the scene hierarchy), yet it
+				// does take time to update the scene so some lag is noticeable.
+				var tree_node;
+				var tree_node_cache = tree_node_caches[tree_type];
+				if (tree_node_cache && tree_node_cache.length > 0) {
+					tree_node = tree_node_cache.pop();
+				}
+				else {
+					tree_node = medea.CreateNode();
+					var tree_scene_node = medea.CloneNode(tree_type === 0 ? tree_prototype : pine_prototype);
+					tree_node.AddChild(tree_scene_node);
+
+					tree_node_cache = tree_node_caches[tree_type] = tree_node_caches[tree_type] || [];
+					tree_node_cache.push(tree_node);
+					tree_node.reclaim_to_cache = tree_type;
+				}
+		
+				tree_node.LocalTransform(this._BuildTreeCoordinateSystem(tree_pos, noise));
+				tree_node.Scale(1.0 + (noise & 15) / 32.0);
 				
-				// Derive a stable coordinate system based on the position of the tree on the sphere,
-				// adding high-frequency noise to have trees appear locally random.
-				var noise = string_hash(tree_pos[0].toString() + tree_pos[1].toString()) & 2047;
-				// TODO: calculation is undefined at the north pole
-
-				var orientation = mat4.identity(scratch_mat);
-				var up = vec3.create(tree_pos);
-				vec3.normalize(up, up);
-
-				var forward = vec3.create();
-				var right = vec3.create();
-			
-				vec3.subtract(north, tree_pos, forward);
-				forward[0] += noise;
-				forward[1] -= noise;
-
-				// Normalize upfront to keep magnitude of numbers low
-				vec3.normalize(forward);
-
-				vec3.cross(forward, up, right);
-				vec3.cross(right, up, forward);
-
-				vec3.normalize(right);
-				vec3.normalize(forward);
-
-				// z (forward) axis
-				orientation[8]  = forward[0];
-				orientation[9]  = forward[1];
-				orientation[10] = forward[2];
-
-				// x (right) axis
-				orientation[0]  = right[0];
-				orientation[1]  = right[1];
-				orientation[2]  = right[2];
-
-				// y (up) axis
-				orientation[4]  = up[0];
-				orientation[5]  = up[1];
-				orientation[6]  = up[2];
-
-				// translation
-				orientation[12] = tree_pos[0];
-				orientation[13] = tree_pos[1];
-				orientation[14] = tree_pos[2];
-
-				tree_node.LocalTransform(orientation);
-
-				var tree_scene_node = medea.CloneNode(noise > 1024 ? tree_prototype : pine_prototype);
-				tree_scene_node.Scale(1.0 + (noise & 15) / 32.0);
-
-				// Add a shallow clone of the prototype node holding the tree mesh.
-				// This re-creates the node hierarchy, but uses the same entities.
-				tree_node.AddChild(tree_scene_node);
 				this.AddChild(tree_node);
 			}
+		},
+
+		_GenTreeNoise : function(tree_pos) {
+			return string_hash(tree_pos[0].toString() + tree_pos[1].toString()) & 2047;
+		},
+
+		_BuildTreeCoordinateSystem : function(tree_pos, noise) {
+			// TODO: calculation is undefined at the north pole
+
+			var orientation = mat4.identity(scratch_mat);
+			var up = vec3.create(tree_pos);
+			vec3.normalize(up, up);
+
+			var forward = vec3.create();
+			var right = vec3.create();
+		
+			vec3.subtract(north, tree_pos, forward);
+			forward[0] += noise;
+			forward[1] -= noise;
+
+			// Normalize upfront to keep magnitude of numbers low
+			vec3.normalize(forward);
+
+			vec3.cross(forward, up, right);
+			vec3.cross(right, up, forward);
+
+			vec3.normalize(right);
+			vec3.normalize(forward);
+
+			// z (forward) axis
+			orientation[8]  = forward[0];
+			orientation[9]  = forward[1];
+			orientation[10] = forward[2];
+
+			// x (right) axis
+			orientation[0]  = right[0];
+			orientation[1]  = right[1];
+			orientation[2]  = right[2];
+
+			// y (up) axis
+			orientation[4]  = up[0];
+			orientation[5]  = up[1];
+			orientation[6]  = up[2];
+
+			// translation
+			orientation[12] = tree_pos[0];
+			orientation[13] = tree_pos[1];
+			orientation[14] = tree_pos[2];
+
+			return orientation;
 		},
 	});
 

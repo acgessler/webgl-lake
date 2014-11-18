@@ -18,6 +18,39 @@ var resources_preloaded = {
 };
 
 
+// Tree database. Defines the major types of trees and their variants,
+// which usually differ only in texture.
+var tree_info = [
+	{
+		meshurl : 'url:data/meshes/tree5.json',
+		offset: [0, -0.3, 0],
+		scale : 0.15,
+		variants: [
+			{
+
+			},
+			{
+				texurl : 'url:data/meshes/tree5_color_b.png'
+			},
+			{
+				texurl : 'url:data/meshes/tree5_color_c.png'
+			},
+		],
+	},
+	{
+		meshurl : 'url:data/meshes/pine.json',
+		offset: [0, -0.3, 0],
+		scale : 0.04,
+
+		variants: [
+			{
+
+			},
+		],
+	}
+];
+
+
 // Return the prototype mesh for drawing a terrain surface with VTF-based
 // height (i.e the mesh is a flat grid with y==0). This mesh
 // is never used for drawing, but tiles use CloneMesh()

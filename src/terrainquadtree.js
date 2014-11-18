@@ -331,7 +331,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 			];
 
 			var scratch = vec3.create();
-			return function(camera, rqmanager) {
+			return function(camera, rqmanager, vis) {
 				this._UpdateWorldSpaceCorners();
 				var cam_pos = camera.GetWorldPos();
 			
@@ -366,17 +366,11 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					this._SetChildrenEnabled(false);
 					return;
 				}
-				this._SetChildrenEnabled(true);
-
-				// If the node is partially hidden, subdivide down until a
-				// threshold LOD is reached (this is a tradeoff between
-				// drawing off screen / overdraw and an increased batch count).
-				var PVS_THRESHOLD_LOD = 5;
-				if (can_subdivide && visibility_status == medea.VISIBLE_PARTIAL &&
-					this.node_lod_level >= PVS_THRESHOLD_LOD) {
-					this._Subdivide();
-					return;
+				else if(vis === medea.VISIBLE_PARTIAL && visibility_status === medea.VISIBLE_ALL) {
+					visibility_status = medea.VISIBLE_PARTIAL;
 				}
+
+				this._SetChildrenEnabled(true);
 
 				// Also, we always sub-divide if the LOD for the
 				// entire tile (which spans multiple 1x1 tiles) would be
@@ -433,11 +427,26 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				clod_min = Math.floor(clod_min);
 
 				var clod_delta = clod_max - clod_min;
+				var node_lod_delta = clod_min - this.node_lod_level;
+				var can_satisfy_lod = node_lod_delta >= 0;
 
-				var can_satisfy_lod = (clod_min - this.node_lod_level) >= 0;
-				// |clod_delta| > 1.0 can cause cracks, but not subdividing saves batches.
+				// Now look for reasons to subdivide further
+				var subdivide = !can_satisfy_lod;
+
+				// If the node is partially hidden, subdivide down until a
+				// threshold LOD is reached (this is a tradeoff between
+				// drawing off screen / overdraw and an increased batch count).
+				var PVS_THRESHOLD_LOD = app.GetGroundDistance() < 20 ? 3 : 5;
+				subdivide = subdivide || (
+					visibility_status == medea.VISIBLE_PARTIAL &&
+					node_lod_delta <= 1 &&
+					this.node_lod_level >= PVS_THRESHOLD_LOD);
+
+				// |clod_delta| > 1.0 can cause cracks, but not dividing saves batches.
 				// Thus, avoid only if close to the camera (i.e. low LOD)
-				if ((!can_satisfy_lod || (clod_delta > 1.0 && clod_min <= 1)) && can_subdivide) {
+				subdivide = subdivide || (clod_delta > 1.0 && clod_min === 0);
+
+				if (can_subdivide && subdivide) {
 					this._Subdivide();
 				}
 				else {
@@ -487,10 +496,10 @@ var InitTerrainQuadTreeType = function(medea, app) {
 				var count_negative = 0;
 				for (var i = 0; i < 4; ++i) {
 					// First check against the dot product of the corner normals.
-					// If a cube face is > 90 degrees apart from cameras up it
+					// If a cube face is > 45 degrees apart from cameras up it
 					// cannot be visible (assuming sane terrain elevation)
 					var d = vec3.dot(this.worldspace_corner_normals[i], norm);
-					if (d < 0.0) {
+					if (d < 0.52 /* cos(45) */) {
 						++count_negative;
 						continue;
 					}
@@ -509,7 +518,7 @@ var InitTerrainQuadTreeType = function(medea, app) {
 					// TODO: this does not take elevations on the line between the camera and
 					// the corner point into account. To further optimize, we could sweep
 					// across the line.
-					if (vec3.length(scratch_src) > RADIUS ) {
+					if (vec3.length(scratch_src) > RADIUS) {
 						continue;
 					}
 
